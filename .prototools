@@ -1,3 +1,7 @@
+azure-cli = "2.88.0"
+npm = "11.10.0"
 openjdk = "~25"
+node = "24.11.1"
 [plugins.tools]
+azure-cli = "github://BarretoTech/proto-azure-cli-plugin"
 openjdk = "github://eplightning/openjdk-adoptium-proto-plugin"

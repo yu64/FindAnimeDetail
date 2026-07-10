@@ -44,5 +44,5 @@ dependencyResolutionManagement {
 //==========================================================================
 
 
-rootProject.name = 'GradleTemplate'
+rootProject.name = 'FindAnimeDetail'
 // include('subproject')
