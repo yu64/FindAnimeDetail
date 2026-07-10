@@ -25,9 +25,10 @@ eclipse {
             genTestSrcDir = file("build/generated/sources/annotationProcessor/java/test")
         }
 
-        file.withProperties { p ->
-        
-            p.put "org.eclipse.jdt.core.compiler.processAnnotations", "enabled"
+        file {
+            withProperties { properties ->
+                properties.put("org.eclipse.jdt.core.compiler.processAnnotations", "enabled")
+            }
         }
     }
 }

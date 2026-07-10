@@ -13,6 +13,7 @@ plugins {
 dependencies {
 
     testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 tasks.named("test") {
@@ -20,28 +21,26 @@ tasks.named("test") {
     useJUnitPlatform()
 }
 
+def sourceSetContainer = extensions.getByType(SourceSetContainer)
 
-//評価完了後に
-afterEvaluate {
+sourceSetContainer.all { sourceSet ->
+    // テスト用の条件にマッチする SourceSet を抽出 (例: test, integrationTest など)
+    if(sourceSet.name.matches("test|.*?Test|test[A-Z].*?")) {
+        // メイン（main）と基本テスト（test）は除外
+        if(sourceSet.name != "main" && sourceSet.name != "test") {
+            
+            println "Auto Create Task \"test_${sourceSet.name}\" SourceSet:${sourceSet.name}"
+            
+            // タスクを遅延登録（register）
+            tasks.register("test_${sourceSet.name}", Test) {
+                group = "verification"
+                description = "Runs the tests for ${sourceSet.name} source set."
 
-    //testと含むSourceSetごとに
-    sourceSets.stream()
-    .filter({s -> s.name.matches("test|.*?Test|test[A-Z].*?")})
-    .filter({s -> !("main".equals(s.name) || "test".equals(s.name)) })
-    .peek({s -> println("Auto Create Task \"test_${s.name}\" SourceSet:${s.name}")})
-    .forEach({sourceSet ->
+                testClassesDirs = sourceSet.output.classesDirs
+                classpath = sourceSet.runtimeClasspath
 
-        //レポートタスクを作成する
-        tasks.register("test_${sourceSet.name}", Test) {
-
-             group = "verification"
-
-            testClassesDirs = sourceSet.output.classesDirs
-            classpath = sourceSet.runtimeClasspath
-
-            useJUnitPlatform()
+                useJUnitPlatform()
+            }
         }
-
-    })
-
+    }
 }

@@ -1,10 +1,8 @@
 {
-    "java.configuration.updateBuildConfiguration": "automatic",
-    "java.compile.nullAnalysis.mode": "automatic",
-    
     "terminal.integrated.env.windows": {
-      "PSExecutionPolicyPreference": "RemoteSigned"
+        "PSExecutionPolicyPreference": "RemoteSigned"
     },
+
     
     "files.exclude": {
 
@@ -34,4 +32,7 @@
         "**/.classpath": true,
         "**/.factorypath": true,
     },
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.compile.nullAnalysis.mode": "automatic",
+    "java.debug.settings.onBuildFailureProceed": true,
 }

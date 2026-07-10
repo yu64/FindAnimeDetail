@@ -1,0 +1,3 @@
+openjdk = "~25"
+[plugins.tools]
+openjdk = "github://eplightning/openjdk-adoptium-proto-plugin"

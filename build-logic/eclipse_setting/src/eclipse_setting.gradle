@@ -17,10 +17,4 @@ eclipse {
         downloadJavadoc = true
         downloadSources = true
     }
-      
-}
-
-eclipse.classpath.file.whenMerged { c ->
-        
-    
 }

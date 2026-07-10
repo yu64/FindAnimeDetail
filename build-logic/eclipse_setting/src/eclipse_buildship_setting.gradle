@@ -12,13 +12,17 @@ plugins {
  */
 boolean isModuleProject() {
     def isModule = false
-    sourceSets.all { sourceSet ->
+
+    def sourceSetContainer = extensions.findByType(SourceSetContainer)
+    if(sourceSetContainer == null) return isModule;
+
+    sourceSetContainer.all { sourceSet ->
 
         if(sourceSet.hasProperty('java') && sourceSet.java.srcDirs) {
             def moduleInfo = sourceSet.java.srcDirs.find { dir ->
                 new File(dir, 'module-info.java').exists()
             }
-            if (moduleInfo) {
+            if(moduleInfo) {
                 isModule = true
                 return
             }
@@ -31,46 +35,56 @@ afterEvaluate {
     def moduleProject = isModuleProject()
     println "Project is a module project: ${moduleProject}"
 
-    eclipse.classpath.file.whenMerged { classpath ->
-        if(moduleProject){
+    
+    eclipse {
+        classpath {
+            file {
+                whenMerged { classpath ->
+                    if(moduleProject) {
+                        // モジュール時
+                        classpath.entries.findAll {
+                            it.properties.kind == 'lib' && it.entryAttributes['test'] != 'true'
+                        }.each {
+                            it.entryAttributes['module'] = 'true'
+                            println "marked module classpath entry: " + it.path
+                        }
 
-            // モジュール時
-            classpath.entries.findAll {
-                it.properties.kind == 'lib' && it.entryAttributes['test'] != 'true'
-            }.each {
-                it.entryAttributes['module'] = 'true'
-                println "marked module classpath entry: " + it.path
-            }
+                        classpath.entries.findAll {
+                            it.properties.kind == 'lib' && it.entryAttributes['test'] == 'true'
+                        }.each {
+                            it.entryAttributes['module'] = 'false'
+                            println "unmarked classpath entry: " + it.path
+                        }
 
-            classpath.entries.findAll {
-                it.properties.kind == 'lib' && it.entryAttributes['test'] == 'true'
-            }.each {
-                it.entryAttributes['module'] = 'false'
-                println "unmarked classpath entry: " + it.path
-            }
-
-            classpath.entries.findAll {
-                it.properties.path.startsWith('org.eclipse.jdt.launching.JRE_CONTAINER')
-            }.each {
-                it.entryAttributes['module'] = 'true'
-                println "marked module container: " + it.path
-            }
-        } else {
-            // 非モジュール時
-            classpath.entries.removeAll { entry ->
-                if(entry.kind == "lib") {
-                    println "delete classpath entry: " + entry.path
-                    return true
+                        classpath.entries.findAll {
+                            it.properties.path.startsWith('org.eclipse.jdt.launching.JRE_CONTAINER')
+                        }.each {
+                            it.entryAttributes['module'] = 'true'
+                            println "marked module container: " + it.path
+                        }
+                    } else {
+                        // 非モジュール時
+                        classpath.entries.removeAll { entry ->
+                            if(entry.kind == "lib") {
+                                println "delete classpath entry: " + entry.path
+                                return true
+                            }
+                            return false
+                        }
+                    }
                 }
-                return false
+            }
+
+            // containers の指定も eclipse.classpath のスコープ内で行う
+            if(!moduleProject) {
+                containers "org.eclipse.buildship.core.gradleclasspathcontainer"
             }
         }
-    }
 
-    if(moduleProject) {
-        // eclipse.classpath.containers "org.eclipse.jdt.launching.JRE_CONTAINER"
-    } else {
-        eclipse.classpath.containers "org.eclipse.buildship.core.gradleclasspathcontainer"
+        project {
+            buildCommand "org.eclipse.buildship.core.gradleprojectbuilder"
+            natures "org.eclipse.buildship.core.gradleprojectnature"
+        }
     }
 }
 
