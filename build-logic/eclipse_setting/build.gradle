@@ -1,0 +1,24 @@
+
+plugins {
+    
+    id("groovy-gradle-plugin")
+}
+
+
+dependencies {
+
+    //[Name]:[Name].gradle.plugin:[Version]
+
+    //AnnotationProcessorによって生成されたクラスをIDEに適用するプラグイン
+    implementation("com.diffplug.eclipse.apt:com.diffplug.eclipse.apt.gradle.plugin:3.40.0")
+}
+
+sourceSets {
+    main {
+        groovy {
+            srcDirs("src")
+            
+        }
+    }
+
+}

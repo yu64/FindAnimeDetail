@@ -1,0 +1,80 @@
+
+plugins {
+
+    id("java-library")
+    id("application")
+}
+
+
+//==========================================================================
+//Javaの設定
+//==========================================================================
+
+
+ext {
+
+    topPackage = "app"
+    mainClassName = "${topPackage}.Main"
+}
+
+
+//javaの設定
+java {
+
+    toolchain {
+        //Javaのバージョンを指定
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+
+}
+
+//アプリケーションの設定
+application {
+
+    //エントリーポイント
+    mainClass = this.ext.mainClassName;
+}
+
+//jarの設定
+jar {
+    manifest {
+        attributes "Main-Class": application.mainClass
+    }
+}
+
+
+//タスクのうち指定のクラスに一致するものに対して処理を行う
+tasks.withType(JavaCompile) {
+
+	options.encoding = "UTF-8"
+}
+
+
+// クラスパスの内容を表示するタスク
+tasks.register("printClasspath", DefaultTask)
+{
+    project.sourceSets.each {srcSet ->
+
+        println("=====")
+        println("# SourceSet: ${srcSet.name}")
+
+        println("-----")
+        println("## compileClasspath")
+        srcSet.compileClasspath.forEach {
+            println "  ${it}"
+        }
+        
+        println("-----")
+        println("## annotationProcessorPath")
+        srcSet.annotationProcessorPath.forEach {
+            println "  ${it}"
+        }
+        
+        println("-----")
+        println("## runtimeClasspath")
+        srcSet.runtimeClasspath.forEach {
+            println "  ${it}"
+        }
+    }
+
+}

@@ -1,0 +1,26 @@
+
+
+plugins {
+
+    id("eclipse")
+}
+
+//==========================================================================
+//Eclipseの設定
+//==========================================================================
+
+
+eclipse {
+
+    classpath {
+
+        downloadJavadoc = true
+        downloadSources = true
+    }
+      
+}
+
+eclipse.classpath.file.whenMerged { c ->
+        
+    
+}

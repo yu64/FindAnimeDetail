@@ -1,0 +1,48 @@
+//==========================================================================
+//リポジトリ設定
+//==========================================================================
+
+
+//プラグインの依存関係を解決するリポジトリ
+pluginManagement {
+    repositories {
+        
+        google()
+        mavenCentral()
+
+        //一部が jcenter に依存
+        gradlePluginPortal()
+    }
+
+    includeBuild("build-logic")
+}
+
+
+plugins {
+    // foojay-resolverプラグインを適用してJDKの自動ダウンロードを許可する
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
+
+//全プロジェクトで使用するリポジトリを指定
+dependencyResolutionManagement {
+    repositories {
+        
+        google()
+        mavenCentral()
+    }
+
+    //子プロジェクトでの指定を禁止
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+}
+
+
+
+
+//==========================================================================
+//プロジェクト設定
+//==========================================================================
+
+
+rootProject.name = 'GradleTemplate'
+include('app')

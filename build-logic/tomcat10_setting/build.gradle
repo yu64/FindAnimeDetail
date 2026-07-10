@@ -1,0 +1,23 @@
+
+plugins {
+    
+    id("groovy-gradle-plugin")
+}
+
+
+dependencies {
+
+    //[Name]:[Name].gradle.plugin:[Version]
+    
+    //JettyとTomcatを導入するプラグイン
+    implementation("org.gretty:org.gretty.gradle.plugin:4.0.3")
+}
+
+sourceSets {
+    main {
+        groovy {
+            srcDirs("src")
+        }
+    }
+
+}

@@ -1,0 +1,242 @@
+
+plugins {
+
+
+}
+
+
+//==========================================================================
+//Jshellの設定
+//==========================================================================
+
+
+
+
+task jshell(type: Exec) {
+
+    group = 'application'
+    description = 'jshellを実行します。Gradleの依存関係を含みます。'
+
+    dependsOn "classes"
+
+    doFirst {
+        standardInput = System.in
+        executable = "jshell"
+        args(getShellArgs(false))
+    }
+}
+
+
+task testJshell(type: Exec) {
+
+    group = 'application'
+    description = 'jshellを実行します。Gradleのテスト環境の依存関係を含みます。'
+
+    dependsOn "testClasses"
+
+    doFirst {
+        standardInput = System.in
+        executable = "jshell"
+        args(getShellArgs(true))
+    }
+}
+
+
+
+
+def getShellArgs(boolean isTest) {
+
+
+    //実行環境のクラスパスを取得
+    def pathSet = getClassPathSet(isTest);
+    def path = pathSet.join(System.getProperty("path.separator"))
+    this.logger.info(":jshell executing with --class-path {}", path)
+
+    //クラスパスの指定部分
+    def shellArgs = [
+        "--class-path", path,
+        "--startup", "DEFAULT",
+        "--startup", "PRINTING"
+    ]
+
+    //startupの指定が空白の場合は、スキップ
+    if (project.findProperty("jshell.startup") == "")
+    {
+        this.logger.info ':jshell "jshell.startup" set to empty string, skipping "startup.jsh" execution'
+        return shellArgs;
+    }
+
+    //startupの指定がある場合は、引数に追加
+    if (project.findProperty("jshell.startup")) {
+        def jshellStartup = project.findProperty("jshell.startup")
+
+        this.logger.info(
+            ":jshell executing with --startup DEFAULT --startup PRINTING --startup \"{}\"", 
+            jshellStartup
+        )
+
+        shellArgs += ["--startup", jshellStartup]
+        return shellArgs;
+    }
+
+    //未指定の場合、プロジェクトルートから見つける
+    def startupJsh = new File("${project.projectDir}/startup.jsh")
+
+    //存在しない場合は、スキップ
+    if(!startupJsh.exists())
+    {
+        this.logger.info(
+            ":jshell did not find a startup.jsh script at the project dir nor a `jshell.startup` configuration"
+        );
+
+        return shellArgs;
+    }
+
+    //存在する場合は、引数に追加
+    def startupJshPath = startupJsh.absolutePath
+    this.logger.info(
+        ":jshell executing with --startup DEFAULT --startup PRINTING --startup \"{}\"", 
+        startupJshPath
+    );
+
+    shellArgs += ["--startup", startupJshPath]
+    return shellArgs;
+}
+
+
+def getClassPathSet(boolean isTest) {
+
+    Set pathSet = []
+
+    SourceSet targetSrc = null;
+    Configuration compile = null;
+    Configuration runtime = null;
+
+    if(isTest)
+    {
+        project.tasks.withType(Test) {
+            pathSet.addAll(classpath.findAll { it.exists() })
+        }
+
+        project.subprojects.each {
+            it.tasks.withType(Test) {
+                pathSet.addAll(classpath.findAll { it.exists() })
+            }
+        }
+
+        targetSrc = project.sourceSets.main;
+        compile = project.configurations.compileClasspath;
+        runtime = project.configurations.runtimeClasspath;
+    }
+    else
+    {
+        project.tasks.withType(JavaExec) {
+            pathSet.addAll(classpath.findAll { it.exists() })
+        }
+
+        project.subprojects.each {
+            it.tasks.withType(JavaExec) {
+                pathSet.addAll(classpath.findAll { it.exists() })
+            }
+        }
+
+
+        targetSrc = project.sourceSets.test;
+        compile = project.configurations.testCompileClasspath;
+        runtime = project.configurations.testRuntimeClasspath;
+    }
+
+    
+
+    if (pathSet.isEmpty()) 
+    {
+
+        List<String> classesPaths = targetSrc.output.getClassesDirs().collect { it.getPath() }
+        this.logger.info(':jshell could not find the classpath, adding ' +
+                                'the following paths from project sourceSets: {}', classesPaths)
+
+        pathSet.addAll(classesPaths)
+
+
+        List<String> depsPaths = compile.collect { it.getPath() }
+        depsPaths.addAll(runtime.collect { it.getPath() })
+        this.logger.info(":jshell could not find the dependencies' classpath, adding " +
+                                'the following paths from project configurations: {}', depsPaths)
+
+        pathSet.addAll(depsPaths)
+    }
+
+    // Exclude non-directory / non-jar files that jshell doesn't deal with
+    pathSet = pathSet.findAll{ new File(it.toString()).isDirectory() || it.toString().endsWith('.jar') }
+
+
+    
+    return pathSet;
+}
+
+
+
+
+
+
+
+
+
+
+
+//==========================================================================
+
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+task jshellCreateStatup() {
+
+    doFirst {
+
+        println("running")
+
+        Path srcPath = Path.of(getProperty("src"));
+        String src = Files.readString(srcPath);
+        println(src)
+
+
+        Pattern classPattern = Pattern.compile("class +(.+?)( +|\\{|\$)");
+        Pattern packagePattern = Pattern.compile("package +(.+?) *;");
+        Pattern importPattern = Pattern.compile("import +.+? *;");
+
+        Matcher classMatcher = classPattern.matcher(src);
+        classMatcher.find();
+        String className = classMatcher.group(1);
+
+        Matcher packageMatcher = packagePattern.matcher(src);
+        packageMatcher.find();
+        String packageName = packageMatcher.group(1);
+
+        Matcher importMatcher = importPattern.matcher(src);
+        List<String> importList = new ArrayList<>();
+        while (importMatcher.find()) {
+
+            importList.add(importMatcher.group(0));
+        }
+
+        importList.add("import " + packageName + "." + className + ";");
+        print(importList)
+        
+        
+        Path output = Path.of("${projectDir}/build/jshell/code_runner.jsh");
+        Files.createDirectories(output.getParent());
+
+        List<String> lines = new ArrayList<>();
+        lines.addAll(importList);
+        lines.add("/set editor \"notepad\"");
+        lines.add("/edit");
+
+
+        Files.write(output, lines);
+
+    }
+    
+}

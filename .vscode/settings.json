@@ -1,0 +1,37 @@
+{
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.compile.nullAnalysis.mode": "automatic",
+    
+    "terminal.integrated.env.windows": {
+      "PSExecutionPolicyPreference": "RemoteSigned"
+    },
+    
+    "files.exclude": {
+
+        //基本
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/CVS": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+
+        //Git
+        "**/.gitattributes": true,
+
+        //Gradle
+        "**/build": true,
+        "**/.gradle": true,
+        "**/gradle": true,
+        "**/gradle/wrapper": true,
+        "**/gradlew": true,
+        "**/gradlew.bat": true,
+
+        //Eclipse
+        "**/bin": true,
+        "**/.settings": true,
+        "**/.project": true,
+        "**/.classpath": true,
+        "**/.factorypath": true,
+    },
+}

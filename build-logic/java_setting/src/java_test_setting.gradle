@@ -1,0 +1,47 @@
+
+
+plugins {
+
+    id("java_setting")
+}
+
+//==========================================================================
+//テスト
+//==========================================================================
+
+
+dependencies {
+
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+}
+
+tasks.named("test") {
+
+    useJUnitPlatform()
+}
+
+
+//評価完了後に
+afterEvaluate {
+
+    //testと含むSourceSetごとに
+    sourceSets.stream()
+    .filter({s -> s.name.matches("test|.*?Test|test[A-Z].*?")})
+    .filter({s -> !("main".equals(s.name) || "test".equals(s.name)) })
+    .peek({s -> println("Auto Create Task \"test_${s.name}\" SourceSet:${s.name}")})
+    .forEach({sourceSet ->
+
+        //レポートタスクを作成する
+        tasks.register("test_${sourceSet.name}", Test) {
+
+             group = "verification"
+
+            testClassesDirs = sourceSet.output.classesDirs
+            classpath = sourceSet.runtimeClasspath
+
+            useJUnitPlatform()
+        }
+
+    })
+
+}

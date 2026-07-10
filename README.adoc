@@ -1,0 +1,9 @@
+# GradleTemplate
+
+Gradle環境のテンプレート
+
+## 導入 (VSCode)
+
+. このリポジトリをクローンする
+. tool/generate_eclipse_apt.batを実行する
+. VSCodeで開く

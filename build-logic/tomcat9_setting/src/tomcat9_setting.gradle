@@ -1,0 +1,46 @@
+
+plugins {
+
+    id("war")
+
+    //JettyとTomcatを導入するプラグイン
+    id("org.gretty")
+}
+
+//==========================================================================
+//Eclipseの設定
+//==========================================================================
+
+
+dependencies {
+
+    //Java Servlet API 4.0
+    implementation 'javax.servlet:javax.servlet-api:4.0.1'
+
+    //Tomcat DBCP + JNDI
+    grettyRunnerTomcat9 'org.apache.tomcat:tomcat-dbcp:9.0.58'
+
+    //Jetty DBCP
+    grettyRunnerJetty94 'org.apache.commons:commons-dbcp2:2.9.0'
+
+}
+
+war {
+
+    webAppDirName = "WebContent"
+}
+
+
+//サーバ設定
+gretty {
+    contextPath = 'app'
+    httpPort = 8080
+
+    //gretty4.0 -> "jetty11" or "tomcat10"
+    //gretty3.0 -> "jetty9.4" or "tomcat9"
+    servletContainer = "tomcat9";
+
+    //Tomcat JNDI
+    enableNaming = true;
+
+}
