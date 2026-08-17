@@ -1,0 +1,10 @@
+[versions]
+java = "25"
+quarkus-plugin = "3.37.2"
+quarkus-platform = "3.37.2"
+
+[libraries]
+quarkus-bom = { group = "io.quarkus.platform", name = "quarkus-bom", version.ref = "quarkus-platform" }
+
+[plugins]
+quarkus = { id = "io.quarkus", version.ref = "quarkus-plugin" }

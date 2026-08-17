@@ -3,6 +3,12 @@
         "PSExecutionPolicyPreference": "RemoteSigned"
     },
 
+    "terminal.integrated.profiles.windows": {
+        "PowerShell": {
+            "source": "PowerShell",
+            "args": ["-NoExit", "-Command", "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8"]
+        }
+    },
     
     "files.exclude": {
 
@@ -18,9 +24,9 @@
         "**/.gitattributes": true,
 
         //Gradle
-        "**/build": true,
+        "**/build": false,
         "**/.gradle": true,
-        "**/gradle": true,
+        "**/gradle": false,
         "**/gradle/wrapper": true,
         "**/gradlew": true,
         "**/gradlew.bat": true,

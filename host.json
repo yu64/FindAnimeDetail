@@ -1,0 +1,21 @@
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "excludedTypes": "Request"
+      }
+    }
+  },
+  "customHandler": {
+    "enableForwardingHttpRequest": true,
+    "description": {
+    "defaultExecutablePath": "FindAnimeDetail-1.0.0-SNAPSHOT-runner.exe",
+    "workingDirectory": "",
+    "arguments": [
+        "-Dquarkus.http.port=%FUNCTIONS_CUSTOMHANDLER_PORT%"
+      ]
+    }
+  }
+}

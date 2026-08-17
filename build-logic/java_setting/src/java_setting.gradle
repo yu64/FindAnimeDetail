@@ -23,7 +23,7 @@ java {
 
     toolchain {
         //Javaのバージョンを指定
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(libs.versions.java.get() as Integer)
     }
 
 }
@@ -45,7 +45,6 @@ jar {
 
 //タスクのうち指定のクラスに一致するものに対して処理を行う
 tasks.withType(JavaCompile) {
-
 	options.encoding = "UTF-8"
 }
 

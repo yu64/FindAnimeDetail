@@ -1,0 +1,21 @@
+
+plugins {
+    
+    id("groovy-gradle-plugin")
+}
+
+
+dependencies {
+
+    //[Name]:[Name].gradle.plugin:[Version]
+    implementation("io.quarkus:io.quarkus.gradle.plugin:${libs.versions.quarkus.plugin.get()}")
+}
+
+sourceSets {
+    main {
+        groovy {
+            srcDirs("src")
+        }
+    }
+
+}

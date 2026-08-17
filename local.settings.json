@@ -1,0 +1,8 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "custom",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "LINE_BOT_CHANNEL_SECRET": "hogehoge"
+  }
+}

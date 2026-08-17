@@ -1,0 +1,18 @@
+{
+  "bindings": [
+    {
+      "type": "httpTrigger",
+      "name": "req",
+      "direction": "in",
+      "methods": [
+        "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"
+      ],
+      "route": "{*path}"
+    },
+    {
+      "type": "http",
+      "name": "$return",
+      "direction": "out"
+    }
+  ]
+}

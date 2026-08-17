@@ -19,3 +19,8 @@ node_modules
 .idea
 local.properties
 
+# Azurite
+__blobstorage__/**
+__queuestorage__/**
+__azurite_db*.json
+AzuriteConfig

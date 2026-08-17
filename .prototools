@@ -1,7 +1,10 @@
 azure-cli = "2.88.0"
 npm = "11.10.0"
-openjdk = "~25"
 node = "24.11.1"
+java = "graalvm-community-25.2.4"
+graalvm-native-image = "25.2.4"
+"npm:azure-functions-core-tools" = "4.12.1"
+"npm:azurite" = "3.36.0"
 [plugins.tools]
 azure-cli = "github://BarretoTech/proto-azure-cli-plugin"
-openjdk = "github://eplightning/openjdk-adoptium-proto-plugin"
+graalvm-native-image = "github://yu64/proto-graalvm-plugin"

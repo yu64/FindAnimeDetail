@@ -32,6 +32,13 @@ dependencyResolutionManagement {
     gradlePluginPortal()
 
   }
+
+  // 親プロジェクトの Version Catalog を参照
+  versionCatalogs {
+    libs {
+      from(files("../gradle/libs.versions.toml"))
+    }
+  }
 }
 
 
@@ -44,7 +51,10 @@ dependencyResolutionManagement {
 rootProject.name = "build-logic"
 
 
-include("eclipse_setting")
-include("java_setting")
-include("tomcat9_setting")
-include("tomcat10_setting")
+// build-logic 配下の全サブプロジェクトを自動検出
+file(".").listFiles()?.each { dir ->
+  if(!dir.isDirectory()) return;
+  if(dir.name.startsWith(".")) return;
+  if(!new File(dir, "build.gradle").exists()) return;
+  include(dir.name)
+}
