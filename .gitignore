@@ -23,4 +23,5 @@ local.properties
 __blobstorage__/**
 __queuestorage__/**
 __azurite_db*.json
+azurite-*.log
 AzuriteConfig

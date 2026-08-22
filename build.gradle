@@ -14,9 +14,6 @@ dependencies {
     // 外部API取得用 HTTPクライアント
     implementation 'io.quarkus:quarkus-rest-client-jackson'
 
-    // Azure Function
-    implementation 'io.quarkus:quarkus-azure-functions-http'
-
     // LINE Bot Sdk Model
     implementation("com.linecorp.bot:line-bot-model:6.0.0")
     
