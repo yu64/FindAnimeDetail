@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     id "java"
     id "io.quarkus"
@@ -25,4 +27,54 @@ compileJava {
 
 compileTestJava {
     options.encoding = 'UTF-8'
+}
+
+
+
+
+
+// Azure Functions のローカル設定ファイルを探索する関数
+File findLocalSettingsFile(File startDirectory, File rootDirectory) {
+    File directory = startDirectory.canonicalFile
+    File root = rootDirectory.canonicalFile
+
+    while (directory != null) {
+        File candidate = new File(directory, 'local.settings.json')
+        if (candidate.isFile()) return candidate
+        if (directory == root) break
+        directory = directory.parentFile
+    }
+
+    return null
+}
+
+// Azure Functions のローカル設定ファイルを探索
+File localSettingsFile = findLocalSettingsFile(
+    project.projectDir,
+    rootProject.projectDir
+)
+
+// Azure Functions のローカル設定ファイルが見つかった場合、quarkusDev タスクに環境変数を設定
+if (localSettingsFile != null) {
+    
+    // local.settings.json の内容を読み込む
+    def localSettings = new JsonSlurper().parse(localSettingsFile)
+
+    // local.settings.json の内容が正しい形式であることを確認
+    if (!(localSettings instanceof Map) || !(localSettings.Values instanceof Map)) {
+        throw new GradleException("'${localSettingsFile}' must contain a JSON object with a 'Values' object.")
+    }
+
+    // local.settings.json の Values オブジェクトを環境変数のマップに変換
+    Map<String, String> localSettingsEnvironment = localSettings.Values.collectEntries { key, value ->
+        [(key.toString()): value.toString()]
+    }
+
+    // quarkusDev タスクに環境変数を設定
+    tasks.named('quarkusDev') {
+        environmentVariables = localSettingsEnvironment
+    }
+
+    // ログに local.settings.json のパスを出力
+    println("quarkusDev loads environment variables from ${localSettingsFile}")
 }

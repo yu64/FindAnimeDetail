@@ -1,4 +1,4 @@
-package app.resource;
+package app.presentation.controller;
 
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -6,7 +6,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 @Path("/sample")
-public class SampleResource {
+public class SampleController {
 
   @GET
   @Produces(MediaType.TEXT_PLAIN)

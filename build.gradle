@@ -19,4 +19,11 @@ dependencies {
     
     // LINE Bot Sdk Parser
     implementation("com.linecorp.bot:line-bot-parser:6.0.0")
+
+    // mug core (構文パーサー)
+    implementation("com.google.mug:mug:10.8.1")
+
+    // mug dot-parse (構文パーサー)
+    implementation("com.google.mug:dot-parse:10.8.1")
 }
+

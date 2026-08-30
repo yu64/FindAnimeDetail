@@ -25,3 +25,6 @@ __queuestorage__/**
 __azurite_db*.json
 azurite-*.log
 AzuriteConfig
+
+# Azure Function
+local.settings.json

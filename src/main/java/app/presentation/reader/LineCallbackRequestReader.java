@@ -1,4 +1,4 @@
-package app.reader;
+package app.presentation.reader;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -19,6 +19,7 @@ import com.linecorp.bot.parser.WebhookParseException;
 import com.linecorp.bot.parser.WebhookParser;
 
 import app.config.LineConfig;
+import io.quarkus.logging.Log;
 
 @Provider
 @Consumes(MediaType.APPLICATION_JSON)
@@ -62,6 +63,7 @@ public class LineCallbackRequestReader implements MessageBodyReader<CallbackRequ
     InputStream entityStream
   ) throws IOException, WebApplicationException
   {
+    Log.info("Catch Request");
 
     String signature = httpHeaders.getFirst("x-line-signature");
     if(signature == null)
@@ -76,11 +78,13 @@ public class LineCallbackRequestReader implements MessageBodyReader<CallbackRequ
     }
     catch(WebhookParseException ex)
     {
+      Log.error("Failed Signature.", ex);
       // 署名検証に失敗した場合は 401 Unauthorized を返す
       throw new WebApplicationException(Response.Status.UNAUTHORIZED);
     }
     catch(Exception ex)
     {
+      Log.error("Failed Auth.", ex);
       // その他の例外の場合、400 を返す。
       throw new WebApplicationException(Response.Status.BAD_REQUEST);
     }
