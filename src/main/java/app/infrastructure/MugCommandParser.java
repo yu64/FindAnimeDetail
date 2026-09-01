@@ -16,7 +16,8 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 public class MugCommandParser implements ICommandParser {
 
-  // ========== 基本要素 ==========
+  // ===========================================================================
+  // MARK: 基本要素
 
   /** 改行 */
   private static final Parser<String> LF = Parser.anyOf(
@@ -33,7 +34,8 @@ public class MugCommandParser implements ICommandParser {
   private static final Parser<String> SPACE_SEP = 
     Parser.one("[ \t\u3000]").atLeastOnce().map(s -> "");
 
-  // ========== コマンド ==========
+  // ===========================================================================
+  // MARK: コマンド
 
   /** コマンド接頭辞（/, %, \） */
   private static final Parser<String> COMMAND_PREFIX =
@@ -43,11 +45,16 @@ public class MugCommandParser implements ICommandParser {
   private static final Parser<String> COMMAND_NAME = 
     Parser.consecutive("[a-zA-Z0-9_]");
 
-  /** コマンド構文: (/|%|\)command */
-  private static final Parser<String> COMMAND_SYNTAX = 
-    COMMAND_PREFIX.then(COMMAND_NAME).source();
+  /** コマンド構文: (/|%|\\)command */
+  private static final Parser<String> COMMAND_SYNTAX =
+    Parser.sequence(
+      COMMAND_PREFIX,
+      COMMAND_NAME,
+      (prefix, name) -> name
+    );
 
-  // ========== パラメータ・値 ==========
+  // ===========================================================================
+  // MARK: パラメータ・値
 
   /** パラメータ名（非記号文字） */
   private static final Parser<String> PARAM_NAME = 
@@ -68,7 +75,23 @@ public class MugCommandParser implements ICommandParser {
       Collectors.toList()
     );
 
-  // ========== 個別パーサー定義 ==========
+  /** フラットリストは 2 個以上の値でのみ成立させる */
+  private static final Parser<List<String>> MULTI_VALUE_FLAT_LIST =
+    Parser.sequence(
+      VALUE,
+      COMMA_SEPARATOR,
+      COMMA_SEPARATED_VALUES,
+      (first, separator, rest) -> {
+        List<String> values = new ArrayList<>();
+        values.add(first);
+        values.addAll(rest);
+        return values;
+      }
+    );
+
+  // ===========================================================================
+  // MARK: 個別パーサー定義
+  
 
   /** パラメータ構文: #param value */
   private static final Parser<ICommandElement> PARAM_PARSER =
@@ -96,7 +119,7 @@ public class MugCommandParser implements ICommandParser {
       Parser.one('#'),
       PARAM_NAME,
       SPACE_SEP,
-      COMMA_SEPARATED_VALUES,
+      MULTI_VALUE_FLAT_LIST,
       (hash, param, space, values) -> 
         new ICommandElement.FlatListElement(param, values)
     );
@@ -124,7 +147,7 @@ public class MugCommandParser implements ICommandParser {
 
   /** 無名フラットリスト構文: value1, value2, ... */
   private static final Parser<ICommandElement> UNNAMED_FLAT_LIST_PARSER =
-    COMMA_SEPARATED_VALUES
+    MULTI_VALUE_FLAT_LIST
       .map(values -> new ICommandElement.UnnamedFlatListElement(values));
 
   /** 準無名フラットリスト構文: # value1, value2, ... */
@@ -165,10 +188,10 @@ public class MugCommandParser implements ICommandParser {
     Parser.anyOf(
       QUASI_UNNAMED_LIST_PARSER,      // #\nval1\nval2
       UNNAMED_LIST_PARSER,            // \nval1\nval2
+      LIST_PARSER,                    // #param\nval1\nval2
       FLAT_LIST_PARSER,               // #param val1, val2
       QUASI_UNNAMED_FLAT_LIST_PARSER, // # val1, val2
       UNNAMED_FLAT_LIST_PARSER,       // val1, val2
-      LIST_PARSER,                    // #param\nval1\nval2
       PARAM_PARSER,                   // #param value
       QUASI_UNNAMED_PARAM_PARSER,     // # value
       SWITCH_PARSER,                  // #param
@@ -186,7 +209,8 @@ public class MugCommandParser implements ICommandParser {
         new ParsedCommand(cmd, elements)
     );
 
-  // ========== ICommandParser実装 ==========
+  // ===========================================================================
+  // MARK: ICommandParser実装
 
   @Override
   public ParsedCommand parse(String text) {

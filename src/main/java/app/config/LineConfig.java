@@ -8,4 +8,7 @@ public interface LineConfig {
 
   @WithDefault("dummy-line-bot-channel-secret")
   public String channelSecret();
+
+  @WithDefault("dummy-line-bot-channel-token")
+  public String channelToken();
 }
