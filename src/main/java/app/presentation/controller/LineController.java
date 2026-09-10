@@ -5,7 +5,12 @@ import com.linecorp.bot.model.event.CallbackRequest;
 import com.linecorp.bot.model.event.MessageEvent;
 import com.linecorp.bot.model.event.message.TextMessageContent;
 
+import app.presentation.ICommandParser;
+import app.util.IResult;
+import app.presentation.mapper.CommandMapper;
+import app.presentation.mapper.ParsedCommand;
 import app.usecase.ILineClient;
+import app.usecase.command.ICommand;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -19,13 +24,19 @@ import jakarta.ws.rs.core.Response;
 public class LineController {
 
   private final ILineClient line;
+  private final ICommandParser parser;
+  private final CommandMapper mapper;
 
   @Inject
   public LineController(
-    ILineClient line
+    ILineClient line,
+    ICommandParser parser,
+    CommandMapper mapper
   )
   {
     this.line = line;
+    this.parser = parser;
+    this.mapper = mapper;
   }
 
   @POST
@@ -38,24 +49,56 @@ public class LineController {
       return Response.ok().build();
     }
 
-    for(var event : req.getEvents())
-    {
-      if(!(event instanceof MessageEvent<?> messageEvent))
-      {
-        continue;
-      }
-
-      if(!(messageEvent.getMessage() instanceof TextMessageContent textMessageContent))
-      {
-        continue;
-      }
-
-      String userText = textMessageContent.getText();
-      String replyToken = messageEvent.getReplyToken();
-
-      this.line.reply(replyToken, userText);
-    }
+    req.getEvents()
+      .parallelStream()
+      .filter(event -> event instanceof MessageEvent<?>)
+      .map(event -> (MessageEvent<?>) event)
+      .forEach(this::onMessage);
 
     return Response.ok().build();
+  }
+
+  /** 各メッセージごとに呼び出される */
+  private void onMessage(MessageEvent<?> messageEvent)
+  {
+    if(!(messageEvent.getMessage() instanceof TextMessageContent textMessageContent))
+    {
+      return;
+    }
+
+    // LINEから入力文字列と送信トークンを取得
+    String userText = textMessageContent.getText();
+    String replyToken = messageEvent.getReplyToken();
+
+    // コマンドパース
+    IResult<ParsedCommand, String> parseResult = this.parser.parse(userText);
+    if(parseResult instanceof IResult.Err(var error))
+    {
+      var msg = (
+        "コマンドのパースに失敗しました。\n"
+        + "ヘルプが必要な場合は `/help` を実行してください。\n"
+        + "\n"
+        + error
+      );
+      this.line.reply(replyToken, msg);
+      return;
+    }
+
+    // コマンドパースに成功したら、実在するコマンドにマッピング
+    IResult<ICommand, String> cmdResult = this.mapper.map(parseResult.ok().val());
+    if(cmdResult instanceof IResult.Err(var error))
+    {
+      var msg = (
+        "コマンドのパースに失敗しました。\n"
+        + "ヘルプが必要な場合は `/help` を実行してください。\n"
+        + "\n"
+        + error
+      );
+      this.line.reply(replyToken, msg);
+      return;
+    }
+
+    ICommand cmd = cmdResult.ok().val();
+    this.line.reply(replyToken, cmd.toString());
   }
 }

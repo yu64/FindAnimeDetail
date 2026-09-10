@@ -37,6 +37,15 @@
         "**/.project": true,
         "**/.classpath": true,
         "**/.factorypath": true,
+
+        //Azure Azurite
+        "__blobstorage__/**": true,
+        "__blobstorage__": true,
+        "__queuestorage__/**": true,
+        "__queuestorage__": true,
+        "__azurite_db*.json": true,
+        "azurite-*.log": true,
+        "AzuriteConfig": true,
     },
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.compile.nullAnalysis.mode": "automatic",

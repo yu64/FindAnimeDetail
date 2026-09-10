@@ -1,227 +1,233 @@
 package app.infrastructure;
 
 import app.presentation.ICommandParser;
-import app.usecase.dto.ParsedCommand;
-import app.usecase.dto.ParsedCommand.ICommandElement;
-import jakarta.enterprise.context.ApplicationScoped;
-
+import app.presentation.mapper.ParsedCommand;
+import app.presentation.mapper.ParsedCommand.ICommandElement;
+import app.presentation.mapper.ParsedCommand.ICommandElement.*;
+import app.util.IResult;
 import com.google.common.labs.parse.Parser;
-import java.util.*;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Collectors;
 
-
-/**
- * Google MUG ParserCombinatorsを使用した汎用コマンドパーサー
- */
+/** docs/parser.md の構文を MUG のパーサーコンビネーターで解析する。 */
 @ApplicationScoped
 public class MugCommandParser implements ICommandParser {
 
-  // ===========================================================================
+  // ###########################################################################
   // MARK: 基本要素
 
-  /** 改行 */
-  private static final Parser<String> LF = Parser.anyOf(
-    Parser.string("\r\n").source(),
-    Parser.one('\n').source(),
-    Parser.one('\r').source()
+  // 改行は行構造に意味を持つため、行内の空白とは別に扱う。
+  private static final Parser<String> LF = Parser.anyOf("\r\n", "\r", "\n");
+  private static final Parser<String> SPACE = Parser.consecutive("[ \t\u3000]");
+  private static final Parser<String>.OrEmpty SPACES = SPACE.orElse("");
+  private static final Parser<String> NAME = Parser.consecutive(
+    c -> Character.isLetterOrDigit(c) || c == '_', "名称"
+  );
+  private static final Parser<String> LINE_TEXT = Parser.consecutive("[^\r\n]");
+
+  private static boolean isSpace(char c) {
+    return c == ' ' || c == '\t' || c == '\u3000';
+  }
+
+  private static boolean isNewline(char c) {
+    return c == '\r' || c == '\n';
+  }
+
+  /** 区切りは消費せず検証し、次のパーサーに渡す。 */
+  private static <T> Parser<T> valueBoundary(Parser<T> parser) {
+    return parser.notImmediatelyFollowedBy(
+      c -> !isSpace(c) && !isNewline(c) && c != ',', "値の後には区切りが必要です");
+  }
+
+  /** 行末の空白を消費し、改行または入力終端まで読み切ったことを確認する。 */
+  private static <T> Parser<T> lineEnd(Parser<T> parser) {
+    return parser.followedBy(SPACES)
+      .notImmediatelyFollowedBy(c -> !isNewline(c), "行末が必要です");
+  }
+
+  // ###########################################################################
+  // MARK: 引用文字列・エスケープ・値
+
+  // 引用符を重ねたエスケープを先に読む。引用の中でも改行は許可しない。
+  private static final Parser<String> DOUBLE_QUOTED = valueBoundary(
+    Parser.anyOf(
+      Parser.string("\"\"").thenReturn("\""),
+      Parser.consecutive("[^\"\r\n]")
+    ).zeroOrMore(Collectors.joining()).between("\"", "\"")
   );
 
-  /** 空白0個以上（半角空白、全角空白、タブ） */
-  private static final Parser<String>.OrEmpty SPACES =
-    Parser.one("[ \t\u3000]").zeroOrMore().map(s -> "");
-
-  /** 空白1個以上 */
-  private static final Parser<String> SPACE_SEP = 
-    Parser.one("[ \t\u3000]").atLeastOnce().map(s -> "");
-
-  // ===========================================================================
-  // MARK: コマンド
-
-  /** コマンド接頭辞（/, %, \） */
-  private static final Parser<String> COMMAND_PREFIX =
-    Parser.anyOf(Parser.one('/'), Parser.one('%'), Parser.one('\\')).source();
-
-  /** コマンド名（非記号文字） */
-  private static final Parser<String> COMMAND_NAME = 
-    Parser.consecutive("[a-zA-Z0-9_]");
-
-  /** コマンド構文: (/|%|\\)command */
-  private static final Parser<String> COMMAND_SYNTAX =
-    Parser.sequence(
-      COMMAND_PREFIX,
-      COMMAND_NAME,
-      (prefix, name) -> name
-    );
-
-  // ===========================================================================
-  // MARK: パラメータ・値
-
-  /** パラメータ名（非記号文字） */
-  private static final Parser<String> PARAM_NAME = 
-    Parser.consecutive("[a-zA-Z0-9_]");
-
-  /** 値（非記号文字の連続、スペース区切り） */
-  private static final Parser<String> VALUE = 
-    Parser.consecutive("[a-zA-Z0-9_]");
-
-  /** カンマ区切り（カンマの前後に空白を許可） */
-  private static final Parser<Character> COMMA_SEPARATOR =
-    Parser.one(',').between(SPACES, SPACES);
-
-  /** カンマ区切り複数値 */
-  private static final Parser<List<String>> COMMA_SEPARATED_VALUES = 
-    VALUE.atLeastOnceDelimitedBy(
-      COMMA_SEPARATOR,
-      Collectors.toList()
-    );
-
-  /** フラットリストは 2 個以上の値でのみ成立させる */
-  private static final Parser<List<String>> MULTI_VALUE_FLAT_LIST =
-    Parser.sequence(
-      VALUE,
-      COMMA_SEPARATOR,
-      COMMA_SEPARATED_VALUES,
-      (first, separator, rest) -> {
-        List<String> values = new ArrayList<>();
-        values.add(first);
-        values.addAll(rest);
-        return values;
-      }
-    );
-
-  // ===========================================================================
-  // MARK: 個別パーサー定義
-  
-
-  /** パラメータ構文: #param value */
-  private static final Parser<ICommandElement> PARAM_PARSER =
-    Parser.sequence(
-      Parser.one('#'),
-      PARAM_NAME,
-      SPACE_SEP,
-      VALUE,
-      (hash, param, space, value) -> 
-        new ICommandElement.ParamElement(param, value)
-    );
-
-  /** スイッチ構文: #param */
-  private static final Parser<ICommandElement> SWITCH_PARSER =
-    Parser.sequence(
-      Parser.one('#'),
-      PARAM_NAME,
-      (hash, param) -> 
-        new ICommandElement.SwitchElement(param)
-    );
-
-  /** フラットリスト構文: #param value1, value2, ... */
-  private static final Parser<ICommandElement> FLAT_LIST_PARSER =
-    Parser.sequence(
-      Parser.one('#'),
-      PARAM_NAME,
-      SPACE_SEP,
-      MULTI_VALUE_FLAT_LIST,
-      (hash, param, space, values) -> 
-        new ICommandElement.FlatListElement(param, values)
-    );
-
-  /** リスト構文: #param\nvalue1\nvalue2\n... */
-  private static final Parser<ICommandElement> LIST_PARSER =
-    Parser.sequence(
-      Parser.one('#'),
-      PARAM_NAME,
-      LF,
-      VALUE.atLeastOnceDelimitedBy(LF, Collectors.toList()),
-      (hash, param, lf, values) -> 
-        new ICommandElement.ListElement(param, values)
-    );
-
-  /** 準無名パラメータ構文: # value */
-  private static final Parser<ICommandElement> QUASI_UNNAMED_PARAM_PARSER =
-    Parser.sequence(
-      Parser.one('#'),
-      SPACE_SEP,
-      VALUE,
-      (hash, space, value) -> 
-        new ICommandElement.QuasiUnnamedParamElement(value)
-    );
-
-  /** 無名フラットリスト構文: value1, value2, ... */
-  private static final Parser<ICommandElement> UNNAMED_FLAT_LIST_PARSER =
-    MULTI_VALUE_FLAT_LIST
-      .map(values -> new ICommandElement.UnnamedFlatListElement(values));
-
-  /** 準無名フラットリスト構文: # value1, value2, ... */
-  private static final Parser<ICommandElement> QUASI_UNNAMED_FLAT_LIST_PARSER =
-    Parser.sequence(
-      Parser.one('#'),
-      SPACE_SEP,
-      COMMA_SEPARATED_VALUES,
-      (hash, space, values) -> 
-        new ICommandElement.QuasiUnnamedFlatListElement(values)
-    );
-
-  /** 無名リスト構文: \nvalue1\nvalue2\n... */
-  private static final Parser<ICommandElement> UNNAMED_LIST_PARSER =
-    Parser.sequence(
-      LF,
-      VALUE.atLeastOnceDelimitedBy(LF, Collectors.toList()),
-      (lf, values) -> 
-        new ICommandElement.UnnamedListElement(values)
-    );
-
-  /** 準無名リスト構文: #\nvalue1\nvalue2\n... */
-  private static final Parser<ICommandElement> QUASI_UNNAMED_LIST_PARSER =
-    Parser.sequence(
-      Parser.one('#'),
-      LF,
-      VALUE.atLeastOnceDelimitedBy(LF, Collectors.toList()),
-      (hash, lf, values) -> 
-        new ICommandElement.QuasiUnnamedListElement(values)
-    );
-
-  /** 無名値 */
-  private static final Parser<ICommandElement> VALUE_PARSER =
-    VALUE.map(v -> new ICommandElement.ValueElement(v));
-
-  /** どれかのコマンド要素 */
-  private static final Parser<ICommandElement> COMMAND_ELEMENT =
+  /** 空白直後の単独 # は次の引数。## は引用文字列内のエスケープ。 */
+  private static final Parser<String> HASH_QUOTED = valueBoundary(
     Parser.anyOf(
-      QUASI_UNNAMED_LIST_PARSER,      // #\nval1\nval2
-      UNNAMED_LIST_PARSER,            // \nval1\nval2
-      LIST_PARSER,                    // #param\nval1\nval2
-      FLAT_LIST_PARSER,               // #param val1, val2
-      QUASI_UNNAMED_FLAT_LIST_PARSER, // # val1, val2
-      UNNAMED_FLAT_LIST_PARSER,       // val1, val2
-      PARAM_PARSER,                   // #param value
-      QUASI_UNNAMED_PARAM_PARSER,     // # value
-      SWITCH_PARSER,                  // #param
-      VALUE_PARSER                    // value
-    );
+      Parser.string("##").thenReturn("#"),
+      Parser.consecutive("[^# \t\u3000\r\n]"),
+      Parser.one("[ \t\u3000]")
+        .notFollowedBy(Parser.one('#').notFollowedBy("#"), "次の引数")
+        .source()
+    ).zeroOrMore(Collectors.joining()).between("#", "#")
+  );
 
-  /** コマンド行全体 */
-  private static final Parser<ParsedCommand> COMMAND_PARSER =
-    Parser.sequence(
-      COMMAND_SYNTAX,
-      SPACE_SEP
-        .then(COMMAND_ELEMENT.atLeastOnceDelimitedBy(SPACE_SEP, Collectors.toList()))
-        .orElse(List.of()),
-      (cmd, elements) ->
-        new ParsedCommand(cmd, elements)
-    );
+  private static final Parser<String> QUOTED = Parser.anyOf(DOUBLE_QUOTED, HASH_QUOTED);
+  private static final Parser<String> VALUE = Parser.anyOf(
+    QUOTED, Parser.consecutive("[^ \t\u3000\r\n,#\"]")
+  );
+  // 値は1個でも成立する。単一値かフラットリストかは呼び出し側で決める。
+  private static final Parser<List<String>> VALUES = VALUE.atLeastOnceDelimitedBy(
+    Parser.one(',').between(SPACES, SPACES), Collectors.toList()
+  );
 
-  // ===========================================================================
-  // MARK: ICommandParser実装
+  // ###########################################################################
+  // MARK: パラメータ・フラットリスト・スイッチ
+
+  private static final Parser<String> PARAM_NAME = Parser.one('#').then(NAME)
+    .notImmediatelyFollowedBy(c -> !isSpace(c) && !isNewline(c), "パラメータ名の後には空白が必要です");
+
+  private static final Parser<ICommandElement> NAMED_PARAM = Parser.sequence(
+    PARAM_NAME, SPACE.then(VALUES),
+    (name, values) -> values.size() == 1
+      ? new ParamElement(name, values.getFirst()) : new FlatListElement(name, values)
+  );
+
+  private static final Parser<ICommandElement> QUASI_PARAM = Parser.one('#').then(SPACE).then(VALUES)
+    .map(values -> values.size() == 1
+      ? new QuasiUnnamedParamElement(values.getFirst()) : new QuasiUnnamedFlatListElement(values));
+
+  private static final Parser<ICommandElement> SWITCH = PARAM_NAME.map(SwitchElement::new);
+  // 値を持つ構文を先に試し、名前だけが残る場合にスイッチとして読む。
+  private static final Parser<ICommandElement> NON_UNNAMED = Parser.anyOf(NAMED_PARAM, QUASI_PARAM, SWITCH);
+  private static final Parser<ICommandElement> UNNAMED = VALUES.map(values -> values.size() == 1
+    ? new ValueElement(values.getFirst()) : new UnnamedFlatListElement(values));
+
+  // #...# の引用が成立する場合は #名称 より優先する。
+  private static final Parser<ICommandElement> ELEMENT = Parser.anyOf(UNNAMED, NON_UNNAMED);
+  private static final Parser<List<ICommandElement>> ARGUMENTS =
+    ELEMENT.atLeastOnceDelimitedBy(SPACE, Collectors.toList());
+
+  // ###########################################################################
+  // MARK: 行頭の構文・リストの境界
+
+  // 行の種類を保持し、後段で連続する値の行をひとつのリストにまとめる。
+  private sealed interface BodyLine {}
+  private record BlankLine() implements BodyLine {}
+  private record HeaderLine(String name) implements BodyLine {}
+  private record ValueLine(String value) implements BodyLine {}
+  private record ArgumentLine(List<ICommandElement> elements) implements BodyLine {}
+
+  // 引用で始まる行もリストの値。引用後の文字列は引数として分解しない。
+  private static final Parser<BodyLine> QUOTED_LINE = Parser.sequence(
+    QUOTED, LINE_TEXT.orElse(""), (value, rest) -> new ValueLine(value + rest)
+  );
+  // #名称だけの行は、後続の値の有無でリスト見出しかスイッチかを決める。
+  private static final Parser<BodyLine> HEADER_LINE = lineEnd(
+    Parser.one('#').then(NAME.orElse("")).map(HeaderLine::new)
+  ).map(header -> header);
+
+  private static final Parser<BodyLine> ARGUMENT_LINE = lineEnd(Parser.sequence(
+    NON_UNNAMED, SPACE.then(ARGUMENTS).orElse(List.of()),
+    (first, rest) -> {
+      // 行頭の非無名引数と、それ以降の引数を入力順に並べる。
+      List<ICommandElement> elements = new ArrayList<>();
+      elements.add(first);
+      elements.addAll(rest);
+
+      return (BodyLine) new ArgumentLine(elements);
+    }
+  ));
+
+  /** 通常のリスト行では、行途中の空白・カンマ・#も値の一部。 */
+  private static final Parser<BodyLine> VALUE_LINE = Parser.sequence(
+    Parser.one("[^#\" \t\u3000\r\n]"), LINE_TEXT.orElse(""),
+    (first, rest) -> new ValueLine(first + rest)
+  );
+
+  // インデントを除き、引用・見出し・引数行を優先して判定する。
+  // 空行はリストの境界になるため、読み飛ばさず後段に渡す。
+  private static final Parser<BodyLine>.OrEmpty BODY_LINE = SPACES.then(
+    Parser.anyOf(QUOTED_LINE, HEADER_LINE, ARGUMENT_LINE, VALUE_LINE).orElse(new BlankLine())
+  );
+
+  // ###########################################################################
+  // MARK: コマンド全体
+
+  private static final Parser<String> COMMAND_NAME = Parser.sequence(
+    Parser.anyOf(Parser.one('/'), Parser.one('$'), Parser.one('@')), NAME,
+    (prefix, name) -> name
+  );
+  // 先頭行の引数は行内の構文として読む。末尾の #名称はスイッチになる。
+  private static final Parser<ParsedCommand> COMMAND_LINE = lineEnd(Parser.sequence(
+    COMMAND_NAME, SPACE.then(ARGUMENTS).orElse(List.of()), ParsedCommand::new
+  ));
+  // 先頭行と後続行を別の規則で読み、解析済みの行を assemble でまとめる。
+  private static final Parser<ParsedCommand> DOCUMENT = Parser.sequence(
+    COMMAND_LINE, LF.then(BODY_LINE).zeroOrMore(), MugCommandParser::assemble
+  );
+
+  /** MUG が解析した行をまとめる。ここでは文字列の再解析を行わない。 */
+  private static ParsedCommand assemble(ParsedCommand command, List<BodyLine> lines) {
+    // コマンド行の引数を先に保持し、後続行の要素を入力順に追加する。
+    List<ICommandElement> elements = new ArrayList<>(command.elements());
+
+    for (int index = 0; index < lines.size();) {
+      // index は次に処理する行を指す。リストをまとめた分もここから先へ進める。
+      BodyLine line = lines.get(index++);
+
+      // 空行自体は要素にしない。引数行は既に解析済みなのでそのまま追加する。
+      if (line instanceof BlankLine) continue;
+
+      if (line instanceof ArgumentLine argument) {
+        elements.addAll(argument.elements());
+        continue;
+      }
+
+      // 見出し行または最初の値の行から、連続する値の行だけを集める。
+      // 空行・別の見出し・引数行に達したら止め、その行は次の反復で処理する。
+      List<String> values = new ArrayList<>();
+      if (line instanceof ValueLine value) values.add(value.value());
+
+      while (index < lines.size() && lines.get(index) instanceof ValueLine value) {
+        values.add(value.value());
+        index++;
+      }
+
+      // 見出しの有無と名称に応じて、リストの種類を確定する。
+      if (line instanceof HeaderLine header) {
+        if (header.name().isEmpty()) {
+          // # だけではスイッチにならないため、値がなければ構文エラー。
+          if (values.isEmpty()) throw new EmptyListException();
+          elements.add(new QuasiUnnamedListElement(values));
+        } else {
+          // #名称に値の行が続かなければ、名前だけのスイッチとして扱う。
+          elements.add(values.isEmpty() ? new SwitchElement(header.name()) : new ListElement(header.name(), values));
+        }
+      } else {
+        elements.add(new UnnamedListElement(values));
+      }
+    }
+
+    return new ParsedCommand(command.command(), elements);
+  }
+
+  private static final class EmptyListException extends RuntimeException {
+    EmptyListException() {
+      super("準無名リストには値の行が必要です。");
+    }
+  }
+
+  // ###########################################################################
+  // MARK: ICommandParser 実装
 
   @Override
-  public ParsedCommand parse(String text) {
-    return COMMAND_PARSER.parse(text);
-  }
+  public IResult<ParsedCommand, String> parse(String text) {
+    // MUG に渡せない null は、ほかの入力エラーと同じ失敗結果にする。
+    if (text == null) return IResult.err("コマンドを入力してください。");
 
-  /**
-   * 入力がパース可能か確認
-   */
-  public boolean matches(String text) {
-    return COMMAND_PARSER.matches(text);
+    // 全入力を解析する。構文エラーと空の準無名リストを呼び出し側へ返す。
+    try {
+      return IResult.ok(DOCUMENT.parse(text));
+    } catch (Parser.ParseException | EmptyListException ex) {
+      return IResult.err(ex.getMessage());
+    }
   }
 }
-

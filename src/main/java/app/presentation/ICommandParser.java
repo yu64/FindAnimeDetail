@@ -1,8 +1,9 @@
 package app.presentation;
 
-import app.usecase.dto.ParsedCommand;
+import app.presentation.mapper.ParsedCommand;
+import app.util.IResult;
 
 public interface ICommandParser {
   
-  public ParsedCommand parse(String text);
+  public IResult<ParsedCommand, String> parse(String text);
 }

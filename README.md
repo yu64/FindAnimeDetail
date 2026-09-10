@@ -8,8 +8,6 @@
 - proto (moonrepo)
 - Visual Stadio Build Tools 2026 (C++)
 
-### Azurite
-
 ### Run (JVM)
 
 - Azure Storageエミュレータ起動
