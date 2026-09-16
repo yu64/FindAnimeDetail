@@ -5,12 +5,18 @@ import com.linecorp.bot.model.event.CallbackRequest;
 import com.linecorp.bot.model.event.MessageEvent;
 import com.linecorp.bot.model.event.message.TextMessageContent;
 
-import app.presentation.ICommandParser;
 import app.util.IResult;
-import app.presentation.mapper.CommandMapper;
-import app.presentation.mapper.ParsedCommand;
-import app.usecase.ILineClient;
-import app.usecase.command.ICommand;
+import app.infrastructure.AnimeSearchException;
+import io.quarkus.logging.Log;
+import app.usecase.IInput.FindInput;
+import app.usecase.IInput.HelpInput;
+import app.usecase.help.HelpUsecase;
+import app.usecase.IInput;
+import app.presentation.ILineClient;
+import app.presentation.command.def.CommandDefRegistry;
+import app.presentation.command.parse.ICommandSyntaxParser;
+import app.presentation.command.parse.CommandExpression;
+import app.usecase.FindUsecase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -24,19 +30,25 @@ import jakarta.ws.rs.core.Response;
 public class LineController {
 
   private final ILineClient line;
-  private final ICommandParser parser;
-  private final CommandMapper mapper;
+  private final ICommandSyntaxParser parser;
+  private final CommandDefRegistry registry;
+  private final HelpUsecase helpUsecase;
+  private final FindUsecase findUsecase;
 
   @Inject
   public LineController(
     ILineClient line,
-    ICommandParser parser,
-    CommandMapper mapper
+    ICommandSyntaxParser parser,
+    CommandDefRegistry registry,
+    HelpUsecase helpUsecase,
+    FindUsecase findUsecase
   )
   {
     this.line = line;
     this.parser = parser;
-    this.mapper = mapper;
+    this.registry = registry;
+    this.helpUsecase = helpUsecase;
+    this.findUsecase = findUsecase;
   }
 
   @POST
@@ -71,7 +83,7 @@ public class LineController {
     String replyToken = messageEvent.getReplyToken();
 
     // コマンドパース
-    IResult<ParsedCommand, String> parseResult = this.parser.parse(userText);
+    IResult<CommandExpression, String> parseResult = this.parser.parse(userText);
     if(parseResult instanceof IResult.Err(var error))
     {
       var msg = (
@@ -85,7 +97,7 @@ public class LineController {
     }
 
     // コマンドパースに成功したら、実在するコマンドにマッピング
-    IResult<ICommand, String> cmdResult = this.mapper.map(parseResult.ok().val());
+    IResult<IInput, String> cmdResult = this.registry.map(parseResult.ok().val());
     if(cmdResult instanceof IResult.Err(var error))
     {
       var msg = (
@@ -98,7 +110,24 @@ public class LineController {
       return;
     }
 
-    ICommand cmd = cmdResult.ok().val();
-    this.line.reply(replyToken, cmd.toString());
+    // ユースケースに振り分けて実行
+    IInput cmd = cmdResult.ok().val();
+    String msg;
+    try {
+      msg = switch(cmd) {
+        case HelpInput c -> helpUsecase.run(c);
+        case FindInput c -> findUsecase.run(c);
+      };
+    } catch (AnimeSearchException e) {
+      Log.error("Anime search failed", e);
+      msg = e.isRateLimited()
+        ? "Annictのアクセス制限により検索できませんでした。しばらく時間を置いてから再検索してください。"
+        : "アニメ情報の取得に失敗しました。しばらく時間を置いてから再検索してください。";
+    } catch (RuntimeException e) {
+      Log.error("Command execution failed", e);
+      msg = "処理中にエラーが発生しました。しばらく時間を置いてから再度お試しください。";
+    }
+    // 返信自体の失敗は捕捉して再送しない。同じ返信トークンでの二重送信を避ける。
+    this.line.reply(replyToken, msg);
   }
 }

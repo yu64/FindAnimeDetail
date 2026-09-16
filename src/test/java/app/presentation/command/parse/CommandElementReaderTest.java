@@ -1,14 +1,14 @@
-package app.presentation.mapper;
+package app.presentation.command.parse;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.List;
 import java.util.Optional;
+
+import app.presentation.command.parse.CommandExpression.IElement;
+import app.presentation.command.parse.CommandExpression.IElement.*;
 import app.util.IResult;
 import org.junit.jupiter.api.Test;
-
-import app.presentation.mapper.ParsedCommand.ICommandElement;
-import app.presentation.mapper.ParsedCommand.ICommandElement.*;
 
 class CommandElementReaderTest {
 
@@ -50,10 +50,10 @@ class CommandElementReaderTest {
   @Test
   void allUnnamedFormsAreReadOneElementAtATime()
   {
-    List<ICommandElement> elements = List.of(new ValueElement("a"), new QuasiUnnamedParamElement("a"),
+    List<IElement> elements = List.of(new ValueElement("a"), new QuasiUnnamedParamElement("a"),
       new UnnamedFlatListElement(List.of("a")), new QuasiUnnamedFlatListElement(List.of("a")),
       new UnnamedListElement(List.of("a")), new QuasiUnnamedListElement(List.of("a")));
-    var reader = new CommandElementReader(new ParsedCommand("find", elements));
+    var reader = new CommandElementReader(new CommandExpression("find", elements));
 
     for(var _ : elements) {
       assertEquals(IResult.ok(Optional.of(List.of("a"))), reader.readStrList("tags"));
@@ -158,8 +158,8 @@ class CommandElementReaderTest {
     MARKDOWN
   }
 
-  private CommandElementReader reader(ICommandElement... elements)
+  private CommandElementReader reader(IElement... elements)
   {
-    return new CommandElementReader(new ParsedCommand("find", List.of(elements)));
+    return new CommandElementReader(new CommandExpression("find", List.of(elements)));
   }
 }

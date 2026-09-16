@@ -1,9 +1,9 @@
 package app.infrastructure;
 
-import app.presentation.ICommandParser;
-import app.presentation.mapper.ParsedCommand;
-import app.presentation.mapper.ParsedCommand.ICommandElement;
-import app.presentation.mapper.ParsedCommand.ICommandElement.*;
+import app.presentation.command.parse.ICommandSyntaxParser;
+import app.presentation.command.parse.CommandExpression;
+import app.presentation.command.parse.CommandExpression.IElement;
+import app.presentation.command.parse.CommandExpression.IElement.*;
 import app.util.IResult;
 import com.google.common.labs.parse.Parser;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
 
 /** docs/parser.md の構文を MUG のパーサーコンビネーターで解析する。 */
 @ApplicationScoped
-public class MugCommandParser implements ICommandParser {
+public class MugCommandSyntaxParser implements ICommandSyntaxParser {
 
   // ###########################################################################
   // MARK: 基本要素
@@ -84,25 +84,25 @@ public class MugCommandParser implements ICommandParser {
   private static final Parser<String> PARAM_NAME = Parser.one('#').then(NAME)
     .notImmediatelyFollowedBy(c -> !isSpace(c) && !isNewline(c), "パラメータ名の後には空白が必要です");
 
-  private static final Parser<ICommandElement> NAMED_PARAM = Parser.sequence(
+  private static final Parser<IElement> NAMED_PARAM = Parser.sequence(
     PARAM_NAME, SPACE.then(VALUES),
     (name, values) -> values.size() == 1
       ? new ParamElement(name, values.getFirst()) : new FlatListElement(name, values)
   );
 
-  private static final Parser<ICommandElement> QUASI_PARAM = Parser.one('#').then(SPACE).then(VALUES)
+  private static final Parser<IElement> QUASI_PARAM = Parser.one('#').then(SPACE).then(VALUES)
     .map(values -> values.size() == 1
       ? new QuasiUnnamedParamElement(values.getFirst()) : new QuasiUnnamedFlatListElement(values));
 
-  private static final Parser<ICommandElement> SWITCH = PARAM_NAME.map(SwitchElement::new);
+  private static final Parser<IElement> SWITCH = PARAM_NAME.map(SwitchElement::new);
   // 値を持つ構文を先に試し、名前だけが残る場合にスイッチとして読む。
-  private static final Parser<ICommandElement> NON_UNNAMED = Parser.anyOf(NAMED_PARAM, QUASI_PARAM, SWITCH);
-  private static final Parser<ICommandElement> UNNAMED = VALUES.map(values -> values.size() == 1
+  private static final Parser<IElement> NON_UNNAMED = Parser.anyOf(NAMED_PARAM, QUASI_PARAM, SWITCH);
+  private static final Parser<IElement> UNNAMED = VALUES.map(values -> values.size() == 1
     ? new ValueElement(values.getFirst()) : new UnnamedFlatListElement(values));
 
   // #...# の引用が成立する場合は #名称 より優先する。
-  private static final Parser<ICommandElement> ELEMENT = Parser.anyOf(UNNAMED, NON_UNNAMED);
-  private static final Parser<List<ICommandElement>> ARGUMENTS =
+  private static final Parser<IElement> ELEMENT = Parser.anyOf(UNNAMED, NON_UNNAMED);
+  private static final Parser<List<IElement>> ARGUMENTS =
     ELEMENT.atLeastOnceDelimitedBy(SPACE, Collectors.toList());
 
   // ###########################################################################
@@ -113,7 +113,7 @@ public class MugCommandParser implements ICommandParser {
   private record BlankLine() implements BodyLine {}
   private record HeaderLine(String name) implements BodyLine {}
   private record ValueLine(String value) implements BodyLine {}
-  private record ArgumentLine(List<ICommandElement> elements) implements BodyLine {}
+  private record ArgumentLine(List<IElement> elements) implements BodyLine {}
 
   // 引用で始まる行もリストの値。引用後の文字列は引数として分解しない。
   private static final Parser<BodyLine> QUOTED_LINE = Parser.sequence(
@@ -128,7 +128,7 @@ public class MugCommandParser implements ICommandParser {
     NON_UNNAMED, SPACE.then(ARGUMENTS).orElse(List.of()),
     (first, rest) -> {
       // 行頭の非無名引数と、それ以降の引数を入力順に並べる。
-      List<ICommandElement> elements = new ArrayList<>();
+      List<IElement> elements = new ArrayList<>();
       elements.add(first);
       elements.addAll(rest);
 
@@ -156,26 +156,27 @@ public class MugCommandParser implements ICommandParser {
     (prefix, name) -> name
   );
   // 先頭行の引数は行内の構文として読む。末尾の #名称はスイッチになる。
-  private static final Parser<ParsedCommand> COMMAND_LINE = lineEnd(Parser.sequence(
-    COMMAND_NAME, SPACE.then(ARGUMENTS).orElse(List.of()), ParsedCommand::new
+  private static final Parser<CommandExpression> COMMAND_LINE = lineEnd(Parser.sequence(
+    COMMAND_NAME, SPACE.then(ARGUMENTS).orElse(List.of()), CommandExpression::new
   ));
   // 先頭行と後続行を別の規則で読み、解析済みの行を assemble でまとめる。
-  private static final Parser<ParsedCommand> DOCUMENT = Parser.sequence(
-    COMMAND_LINE, LF.then(BODY_LINE).zeroOrMore(), MugCommandParser::assemble
+  private static final Parser<CommandExpression> DOCUMENT = Parser.sequence(
+    COMMAND_LINE, LF.then(BODY_LINE).zeroOrMore(), MugCommandSyntaxParser::assemble
   );
 
   /** MUG が解析した行をまとめる。ここでは文字列の再解析を行わない。 */
-  private static ParsedCommand assemble(ParsedCommand command, List<BodyLine> lines) {
+  private static CommandExpression assemble(CommandExpression command, List<BodyLine> lines) {
     // コマンド行の引数を先に保持し、後続行の要素を入力順に追加する。
-    List<ICommandElement> elements = new ArrayList<>(command.elements());
+    List<IElement> elements = new ArrayList<>(command.elements());
 
     for (int index = 0; index < lines.size();) {
       // index は次に処理する行を指す。リストをまとめた分もここから先へ進める。
       BodyLine line = lines.get(index++);
 
-      // 空行自体は要素にしない。引数行は既に解析済みなのでそのまま追加する。
+      // 空行はリストの境界として使い、コマンド要素には追加しない。
       if (line instanceof BlankLine) continue;
 
+      // 引数行は解析済みの要素をそのまま追加し、次の行へ進む。
       if (line instanceof ArgumentLine argument) {
         elements.addAll(argument.elements());
         continue;
@@ -196,17 +197,21 @@ public class MugCommandParser implements ICommandParser {
         if (header.name().isEmpty()) {
           // # だけではスイッチにならないため、値がなければ構文エラー。
           if (values.isEmpty()) throw new EmptyListException();
+
+          // 名前のない見出しに続く値を、準無名リストとして保持する。
           elements.add(new QuasiUnnamedListElement(values));
         } else {
           // #名称に値の行が続かなければ、名前だけのスイッチとして扱う。
           elements.add(values.isEmpty() ? new SwitchElement(header.name()) : new ListElement(header.name(), values));
         }
       } else {
+        // 見出しなしで始まった値の行は、無名リストとして保持する。
         elements.add(new UnnamedListElement(values));
       }
     }
 
-    return new ParsedCommand(command.command(), elements);
+    // 先頭行と後続行の要素を、入力順を保った1つのコマンドにまとめる。
+    return new CommandExpression(command.command(), elements);
   }
 
   private static final class EmptyListException extends RuntimeException {
@@ -219,7 +224,7 @@ public class MugCommandParser implements ICommandParser {
   // MARK: ICommandParser 実装
 
   @Override
-  public IResult<ParsedCommand, String> parse(String text) {
+  public IResult<CommandExpression, String> parse(String text) {
     // MUG に渡せない null は、ほかの入力エラーと同じ失敗結果にする。
     if (text == null) return IResult.err("コマンドを入力してください。");
 

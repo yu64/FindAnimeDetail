@@ -1,12 +1,11 @@
-package app.presentation.mapper;
+package app.presentation.command.parse;
 
 import java.util.*;
 import java.util.stream.Stream;
 
+import app.presentation.command.parse.CommandExpression.IElement;
+import app.presentation.command.parse.CommandExpression.IElement.*;
 import app.util.IResult;
-
-import app.presentation.mapper.ParsedCommand.ICommandElement;
-import app.presentation.mapper.ParsedCommand.ICommandElement.*;
 
 
 /**
@@ -16,11 +15,11 @@ import app.presentation.mapper.ParsedCommand.ICommandElement.*;
  */
 public class CommandElementReader {
 
-  private final Map<String, List<ICommandElement>> named = new LinkedHashMap<>();
-  private final List<ICommandElement> unnamed = new ArrayList<>();
+  private final Map<String, List<IElement>> named = new LinkedHashMap<>();
+  private final List<IElement> unnamed = new ArrayList<>();
   private int position = 0;
 
-  public CommandElementReader(ParsedCommand command)
+  public CommandElementReader(CommandExpression command)
   {
     for(var element : command.elements()) {
 
@@ -80,18 +79,21 @@ public class CommandElementReader {
   public <E extends Enum<E>> IResult<Optional<E>, String> readEnum(String name, Class<E> clazz)
   {
     Objects.requireNonNull(clazz);
-    return this.readStr(name)
-      .flatMap(value -> {
-        if(value.isEmpty()) return IResult.ok(Optional.empty());
-        for(var constant : clazz.getEnumConstants()) {
-          if(constant.name().equalsIgnoreCase(value.get())) return IResult.ok(Optional.of(constant));
-        }
-        var typeNames = Stream.of(clazz.getEnumConstants())
-          .map(v -> v.name())
-          .toList();
-        return IResult.err("列挙定数に変換できません: " + name + " = " + value.get()
-          + "（期待: " + typeNames + "）");
-      });
+
+    var strResult = this.readStr(name);
+    if(strResult instanceof IResult.Err) return strResult.err();
+
+    var value = strResult.ok().val();
+    if(value.isEmpty()) return IResult.ok(Optional.empty());
+
+    for(var constant : clazz.getEnumConstants()) {
+      if(constant.name().equalsIgnoreCase(value.get())) return IResult.ok(Optional.of(constant));
+    }
+    var typeNames = Stream.of(clazz.getEnumConstants())
+      .map(v -> v.name())
+      .toList();
+    return IResult.err("列挙定数に変換できません: " + name + " = " + value.get()
+      + "（期待: " + typeNames + "）");
   }
 
   /**
@@ -100,15 +102,17 @@ public class CommandElementReader {
    */
   public IResult<Optional<Integer>, String> readInt(String name)
   {
-    return this.readStr(name)
-      .flatMap(value -> {
-        if(value.isEmpty()) return IResult.ok(Optional.empty());
-        try {
-          return IResult.ok(Optional.of(Integer.parseInt(value.get())));
-        } catch(NumberFormatException e) {
-          return IResult.err("整数に変換できません: " + name + " = " + value.get());
-        }
-      });
+    var strResult = this.readStr(name);
+    if(strResult instanceof IResult.Err) return strResult.err();
+
+    var value = strResult.ok().val();
+    if(value.isEmpty()) return IResult.ok(Optional.empty());
+
+    try {
+      return IResult.ok(Optional.of(Integer.parseInt(value.get())));
+    } catch(NumberFormatException e) {
+      return IResult.err("整数に変換できません: " + name + " = " + value.get());
+    }
   }
 
   /**

@@ -11,9 +11,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import app.presentation.mapper.ParsedCommand;
-import app.presentation.mapper.ParsedCommand.ICommandElement;
-import app.presentation.mapper.ParsedCommand.ICommandElement.*;
+
+import app.presentation.command.parse.CommandExpression;
+import app.presentation.command.parse.CommandExpression.IElement;
+import app.presentation.command.parse.CommandExpression.IElement.*;
 import app.util.IResult;
 
 /** docs/parser.md の仕様例を期待値とする。実装の挙動に合わせて期待値を変更しない。 */
@@ -22,10 +23,10 @@ class MugCommandParserTest {
     // ###########################################################################
     // MARK: テスト共通処理
 
-    private final MugCommandParser parser = new MugCommandParser();
+    private final MugCommandSyntaxParser parser = new MugCommandSyntaxParser();
 
-    private void assertParsed(String input, ParsedCommand expected) {
-        ParsedCommand actual = parser.parse(input).fold(
+    private void assertParsed(String input, CommandExpression expected) {
+        CommandExpression actual = parser.parse(input).fold(
             command -> command,
             error -> fail("Expected successful parse of:\n" + input + "\nError: " + error)
         );
@@ -33,8 +34,8 @@ class MugCommandParserTest {
         assertEquals(expected, actual, () -> "Input:\n" + input);
     }
 
-    private static Arguments example(String name, String input, ICommandElement... elements) {
-        return Arguments.of(name, input, new ParsedCommand("hoge", List.of(elements)));
+    private static Arguments example(String name, String input, IElement... elements) {
+        return Arguments.of(name, input, new CommandExpression("hoge", List.of(elements)));
     }
 
     // ###########################################################################
@@ -43,7 +44,7 @@ class MugCommandParserTest {
     @DisplayName("仕様書の成功例")
     @ParameterizedTest(name = "{0}")
     @MethodSource("specificationExamples")
-    void parsesSpecificationExample(String name, String input, ParsedCommand expected) {
+    void parsesSpecificationExample(String name, String input, CommandExpression expected) {
         assertParsed(input, expected);
     }
 
@@ -165,7 +166,7 @@ class MugCommandParserTest {
     @DisplayName("構文ごとの基本ケース")
     @ParameterizedTest(name = "{0}")
     @MethodSource("syntaxExamples")
-    void parsesIndividualSyntax(String name, String input, ParsedCommand expected) {
+    void parsesIndividualSyntax(String name, String input, CommandExpression expected) {
         assertParsed(input, expected);
     }
 
@@ -203,7 +204,7 @@ class MugCommandParserTest {
     @ParameterizedTest
     @ValueSource(strings = {"/", "$", "@"})
     void acceptsCommandPrefix(String prefix) {
-        assertParsed(prefix + "hoge", new ParsedCommand("hoge", List.of()));
+        assertParsed(prefix + "hoge", new CommandExpression("hoge", List.of()));
     }
 
     // ###########################################################################
@@ -214,7 +215,7 @@ class MugCommandParserTest {
     @MethodSource("lineEndings")
     void parsesMultilineInput(String name, String newline, boolean trailingNewline) {
         String input = String.join(newline, "/hoge", "a", "b") + (trailingNewline ? newline : "");
-        assertParsed(input, new ParsedCommand("hoge", List.of(new UnnamedListElement(List.of("a", "b")))));
+        assertParsed(input, new CommandExpression("hoge", List.of(new UnnamedListElement(List.of("a", "b")))));
     }
 
     static Stream<Arguments> lineEndings() {

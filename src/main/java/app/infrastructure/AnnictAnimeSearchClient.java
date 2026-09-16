@@ -75,10 +75,13 @@ public class AnnictAnimeSearchClient {
     ObjectMapper objectMapper,
     AnnictConfig config
   ) {
+    // JSON変換とHTTP通信に使うオブジェクトを初期化する。
     this.objectMapper = objectMapper;
     this.httpClient = HttpClient.newBuilder()
       .connectTimeout(CONNECT_TIMEOUT)
       .build();
+
+    // 接続先と認証情報は共通のAnnict設定から受け取る。
     this.endpoint = config.url();
     this.accessToken = config.token();
   }
@@ -93,15 +96,19 @@ public class AnnictAnimeSearchClient {
    * @return 検索に一致したアニメ情報
    */
   public List<AnimeSearchResult> searchByTitle(String titleFragment, int limit) {
+    // 不正な検索条件は、外部APIへ通信する前に検出する。
     validateSearchCondition(titleFragment, limit);
 
     try {
+      // 検索条件をGraphQLリクエストに変換して送信する。
       HttpRequest request = createRequest(titleFragment, limit);
       HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
+      // HTTPの成功を確認してから、JSONを検索結果へ変換する。
       validateResponse(response);
       return mapResponse(objectMapper.readTree(response.body()));
     } catch (InterruptedException e) {
+      // 割り込み状態を復元し、呼び出し側にも検索の中断を伝える。
       Thread.currentThread().interrupt();
       throw new AnimeSearchException("Annict API request was interrupted", e);
     } catch (IOException e) {
@@ -113,6 +120,7 @@ public class AnnictAnimeSearchClient {
 
   /** GraphQLリクエストを生成 */
   private HttpRequest createRequest(String titleFragment, int limit) throws IOException {
+    // クエリと変数をJSONにまとめ、タイトルを文字列として渡す。
     String body = objectMapper.writeValueAsString(
       Map.of(
         "query", QUERY,
@@ -123,6 +131,7 @@ public class AnnictAnimeSearchClient {
       )
     );
 
+    // 認証・応答待ち時間・本文の形式を設定してPOSTリクエストを作る。
     return HttpRequest.newBuilder(endpoint)
       .timeout(REQUEST_TIMEOUT)
       .header("Authorization", "Bearer " + accessToken)
@@ -135,23 +144,28 @@ public class AnnictAnimeSearchClient {
 
   /** GraphQLレスポンスをアニメ検索結果へ変換 */
   private List<AnimeSearchResult> mapResponse(JsonNode root) {
+    // HTTPが成功していても、GraphQL側のエラーがあれば変換を中止する。
     validateGraphQlResponse(root);
 
+    // 各作品を変換し、呼び出し元で変更できない一覧として返す。
     List<AnimeSearchResult> results = new ArrayList<>();
     for (JsonNode edge : root.path("data").path("searchWorks").path("edges")) {
       results.add(mapWork(edge.path("node")));
     }
+
     return List.copyOf(results);
   }
 
   /** 作品情報を検索結果へ変換 */
   private AnimeSearchResult mapWork(JsonNode work) {
+    // 公式URLの未登録・空文字を、URIへ変換する前にnullへ揃える。
     String officialUrl = nullableText(work, "officialSiteUrl");
 
+    // 作品の基本情報に、その作品の各話の放送予定をまとめる。
     return new AnimeSearchResult(
       work.path("annictId").asInt(),
       work.path("title").asText(),
-      officialUrl == null ? null : URI.create(officialUrl),
+      (officialUrl == null ? null : URI.create(officialUrl)),
       mapBroadcasts(work.path("programs").path("edges"))
     );
   }
@@ -159,10 +173,13 @@ public class AnnictAnimeSearchClient {
   /** 放送予定を一覧へ変換 */
   private List<Broadcast> mapBroadcasts(JsonNode programEdges) {
     List<Broadcast> broadcasts = new ArrayList<>();
+
     for (JsonNode programEdge : programEdges) {
+      // 放送枠から、放送情報と各話情報を取り出す。
       JsonNode program = programEdge.path("node");
       JsonNode episode = program.path("episode");
 
+      // 放送日時を日時型に変換し、未登録の話数・タイトルはnullとして保持する。
       broadcasts.add(new Broadcast(
         program.path("channel").path("name").asText(),
         OffsetDateTime.parse(program.path("startedAt").asText()),
@@ -170,6 +187,7 @@ public class AnnictAnimeSearchClient {
         nullableText(episode, "title")
       ));
     }
+
     return broadcasts;
   }
 
@@ -177,9 +195,12 @@ public class AnnictAnimeSearchClient {
 
   /** 検索条件を検証 */
   private static void validateSearchCondition(String titleFragment, int limit) {
+    // タイトルの手がかりがない検索を拒否する。
     if (titleFragment == null || titleFragment.isBlank()) {
       throw new IllegalArgumentException("titleFragment must not be blank");
     }
+
+    // 1回で取得する作品数を、クライアントの対応範囲に収める。
     if (limit < 1 || limit > MAX_SEARCH_RESULTS) {
       throw new IllegalArgumentException(
         "limit must be between 1 and " + MAX_SEARCH_RESULTS
@@ -209,6 +230,10 @@ public class AnnictAnimeSearchClient {
   /** 空文字とJSON nullをJavaのnullへ変換 */
   private static String nullableText(JsonNode node, String field) {
     JsonNode value = node.get(field);
-    return value == null || value.isNull() || value.asText().isBlank() ? null : value.asText();
+    return (
+      value == null || value.isNull() || value.asText().isBlank()
+      ? null
+      : value.asText()
+    );
   }
 }
