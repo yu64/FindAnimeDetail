@@ -10,7 +10,7 @@ public interface IAnnictClient {
 
     /** minimumStartsAtは以上、futureOnlyは検索開始時刻より後。両方指定した場合は両条件を満たす。 */
     public record SearchCondition(
-        String title,
+        List<String> titles,
         List<String> seasons,
         OffsetDateTime minimumStartsAt,
         boolean futureOnly
@@ -18,11 +18,16 @@ public interface IAnnictClient {
         /** タイトルとクール一覧を正規化し、検索条件の指定とクールの書式を検証する。 */
         public SearchCondition {
             // 未指定を空値に揃え、呼び出し元によるクール一覧の変更を防ぐ。
-            title = (title == null ? "" : title.strip());
+            titles = titles == null ? List.of() : titles.stream().map(title -> {
+                if (title == null || title.isBlank()) {
+                    throw new IllegalArgumentException("Title must not be blank");
+                }
+                return title.strip();
+            }).distinct().toList();
             seasons = (seasons == null ? List.of() : List.copyOf(seasons));
 
             // タイトルかクールの少なくとも一方を、検索の手がかりとして必須にする。
-            if (title.isEmpty() && seasons.isEmpty()) {
+            if (titles.isEmpty() && seasons.isEmpty()) {
                 throw new IllegalArgumentException("Specify title or seasons");
             }
 
@@ -33,12 +38,18 @@ public interface IAnnictClient {
                 }
             }
         }
+
+        public SearchCondition(String title, List<String> seasons,
+            OffsetDateTime minimumStartsAt, boolean futureOnly) {
+            this(title == null || title.isBlank() ? List.of() : List.of(title),
+                seasons, minimumStartsAt, futureOnly);
+        }
     }
 
-    /** 検索結果には、指定局の局名と初回放送日時が判明している作品のみを含む。 */
+    /** 放送情報が不明な作品も含む。firstBroadcastは未取得ならnull。 */
     public record Anime(int annictId, String title, URI officialSiteUrl, FirstBroadcast firstBroadcast) {}
 
-    /** startsAtはAsia/Tokyo。日付・時刻・曜日はいずれもこの初回日時から取り出す。 */
+    /** startsAtはAsia/Tokyo。日時・局名は不明ならnull、局IDは不明なら0。 */
     public record FirstBroadcast(int channelId, String channelName, ZonedDateTime startsAt) {}
 
     /** 条件に一致する全作品と指定局の優先順で選んだ初回放送情報を返す（優先順はAnnictConfig.channelPriority()）。 */

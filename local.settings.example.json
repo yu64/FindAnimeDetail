@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "ANNICT_API_CHANNEL_PRIORITY": "19,188,7,5,4,6,3,2,1",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "custom",
+    "FUNCTIONS_EXTENSION_VERSION": "~4",
+    "ANNICT_API_URL": "https://api.annict.com/graphql",
+    "ANNICT_API_TOKEN": "",
+    "LINE_BOT_CHANNEL_SECRET": "",
+    "LINE_BOT_CHANNEL_TOKEN": "",
+    "LINE_API_BASE_URL": "https://api.line.me"
+  }
+}

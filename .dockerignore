@@ -1,0 +1,23 @@
+# Allow only build inputs. Local settings, tokens and IDE files stay on the host.
+**
+!gradlew
+!settings.gradle
+!build.gradle
+!gradle.properties
+!.prototools
+!gradle/
+!gradle/**
+!build-logic/
+!build-logic/**
+!src/
+!src/**
+!container/
+!container/dev/
+!container/dev/Dockerfile
+!container/dev/entrypoint.sh
+!container/aca-deploy/
+!container/aca-deploy/Dockerfile
+**/build
+**/.gradle
+**/local.settings*.json
+**/*.env

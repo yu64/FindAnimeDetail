@@ -1,0 +1,37 @@
+# 開発用コンテナをまとめる Compose プロジェクト名。
+name: find-anime-detail-dev
+
+services:
+  app:
+
+    # リポジトリ全体をビルド対象とし、DEV_MODE で Native / JVM を選ぶ。
+    build:
+      context: ../..
+      dockerfile: container/dev/Dockerfile
+      target: ${DEV_MODE:-native}
+    platform: linux/amd64
+
+    # ホストのループバックアドレスだけに HTTP ポートを公開する。
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    # コンテナ内の HTTP 待ち受け設定。
+    environment:
+      QUARKUS_HTTP_HOST: 0.0.0.0
+      QUARKUS_HTTP_PORT: "8080"
+
+    # ホストの設定とソースを読み取り専用で共有する。
+    volumes:
+      # 設定ファイルが存在しない場合は、ディレクトリを自動作成せず失敗させる。
+      - type: bind
+        source: ../../local.settings.json
+        target: /run/config/local.settings.json
+        read_only: true
+        bind:
+          create_host_path: false
+
+      # JVM は次のリクエスト時に変更を反映する。Native は再ビルドが必要。
+      - ../../src:/workspace/src:ro
+
+    # 停止シグナルを受けてから強制終了するまでの猶予。
+    stop_grace_period: 30s

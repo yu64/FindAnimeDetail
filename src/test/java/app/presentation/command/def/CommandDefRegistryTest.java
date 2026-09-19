@@ -32,6 +32,18 @@ class CommandDefRegistryTest {
   }
 
   @Test
+  void mapsCompleteSwitchWithOtherOptionsAndRejectsValuesOrDuplicates() {
+    assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("anime"), null, true)),
+      map("/find #word anime #complete"));
+    var from = OffsetDateTime.parse("2026-10-01T00:00:00+09:00");
+    assertEquals(IResult.ok(new FindInput(Format.MD, List.of("a", "b"), from, true)),
+      map("/find #complete #format md #word a, b #from 2026-10-01T00:00"));
+    for (String suffix : List.of("#complete true", "#complete false", "#complete #complete")) {
+      assertInstanceOf(IResult.Err.class, map("/find #word anime " + suffix));
+    }
+  }
+
+  @Test
   void mapsFromWithJapaneseTimeOrExplicitOffset() {
     var from = OffsetDateTime.parse("2026-10-01T00:00:00+09:00");
     assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("anime"), from)),
@@ -46,8 +58,33 @@ class CommandDefRegistryTest {
   }
 
   @Test
+  void mapsFromWithoutTimeOrDayToJapaneseMidnight() {
+    for (String value : List.of("2026-10", "2026-10-01")) {
+      assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("anime"),
+          OffsetDateTime.parse("2026-10-01T00:00:00+09:00"))),
+        map("/find #word anime #from " + value));
+    }
+    assertEquals(IResult.ok(new FindInput(Format.MD, List.of("a", "b"),
+        OffsetDateTime.parse("2028-02-29T00:00:00+09:00"), true)),
+      map("/find #format md #word a, b #from 2028-02-29 #complete"));
+    assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("a", "b"),
+        OffsetDateTime.parse("2026-10-01T00:00:00+09:00"))),
+      map("/find #from 2026-10\na\nb"));
+  }
+
+  @Test
+  void fromParseFailureUsesCommandSpecificMessage() {
+    assertEquals(IResult.err(
+      "from は年月・日付・日時で指定してください（例: 2026-10、2026-10-01、2026-10-01T00:00）"),
+      map("/find #word anime #from 2026-02-30"));
+    assertEquals(IResult.err("パラメータが重複しています: from"),
+      map("/find #word anime #from 2026-10 #from 2026-11"));
+  }
+
+  @Test
   void rejectsInvalidOrDuplicateFrom() {
-    for (String suffix : List.of("invalid", "2026-02-30T00:00", "2026-10-01", "",
+    for (String suffix : List.of("invalid", "2026-02-30T00:00", "2026-02-29", "2026-04-31",
+        "2026-00", "2026-13", "2026", "2026-1", "2026-10T12:00", "",
         "2026-10-01T00:00, 2026-10-02T00:00",
         "2026-10-01T00:00 #from 2026-10-02T00:00")) {
       assertInstanceOf(IResult.Err.class, map("/find #word anime #from " + suffix), suffix);

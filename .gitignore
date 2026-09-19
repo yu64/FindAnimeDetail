@@ -30,3 +30,6 @@ AzuriteConfig
 
 # Azure Function
 local.settings.json
+
+# Local container credentials
+container/dev/container.env

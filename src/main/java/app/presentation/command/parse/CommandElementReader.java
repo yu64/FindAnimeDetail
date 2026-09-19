@@ -1,6 +1,10 @@
 package app.presentation.command.parse;
 
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.temporal.TemporalAccessor;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import app.presentation.command.parse.CommandExpression.IElement;
@@ -74,7 +78,7 @@ public class CommandElementReader {
 
   /**
    * 単一値を列挙定数に変換する。定数名は大文字・小文字を区別しない。
-   * 未指定なら成功の空値、変換できなければ失敗。読み取った無名値は変換失敗時も消費される。
+   * 読み取った無名値は変換失敗時も消費される。
    */
   public <E extends Enum<E>> IResult<Optional<E>, String> readEnum(String name, Class<E> clazz)
   {
@@ -94,6 +98,42 @@ public class CommandElementReader {
       .toList();
     return IResult.err("列挙定数に変換できません: " + name + " = " + value.get()
       + "（期待: " + typeNames + "）");
+  }
+
+  /**
+   * 単一値を指定された形式のTemporalに変換する。
+   * 読み取った無名値は変換失敗時も消費される。
+   * 全形式で変換に失敗した場合のみparsedErrorMsgを呼ぶ。重複・型不一致はreadStrのエラーを返す。
+   */
+  public IResult<Optional<TemporalAccessor>, String> readTemporal(
+    String name,
+    List<DateTimeFormatter> fmts,
+    Supplier<String> parsedErrorMsg
+  )
+  {
+    var strResult = this.readStr(name);
+    if(strResult instanceof IResult.Err) return strResult.err();
+
+    var value = strResult.ok().val();
+    if(value.isEmpty()) return IResult.ok(Optional.empty());
+
+    // フォーマッターを上から適用して求める。
+    String text = value.get();
+    for(var fmt : fmts)
+    {
+      // パース
+      try
+      {
+        return IResult.ok(Optional.of(fmt.parse(text)));
+      }
+      catch(DateTimeParseException ex)
+      {
+        // パース失敗
+        continue;
+      }
+    }
+
+    return IResult.err(parsedErrorMsg.get());
   }
 
   /**

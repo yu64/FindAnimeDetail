@@ -31,7 +31,7 @@ public interface IAnnictDef extends IAnnictClient {
   // ###########################################################################
   // MARK: GraphQLクエリ
 
-  /** 作品一覧を50件ずつ取得する。放送データは作品ごとに別途取得する。 */
+  /** 複数タイトルをOR検索し、作品と放送データの先頭ページをまとめて取得する。 */
   public String WORKS_QUERY = """
     query SearchWorks($titles: [String!], $seasons: [String!], $after: String) {
       searchWorks(titles: $titles, seasons: $seasons, first: 50, after: $after) {
@@ -39,6 +39,13 @@ public interface IAnnictDef extends IAnnictClient {
           annictId
           title
           officialSiteUrl
+          programs(first: 50, orderBy: {field: STARTED_AT, direction: ASC}) {
+            nodes {
+              startedAt
+              channel { annictId name }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
         }
         pageInfo {
           hasNextPage
@@ -117,8 +124,8 @@ public interface IAnnictDef extends IAnnictClient {
       // 指定された検索条件と、前ページから受け取ったカーソルを渡す。
       Map<String, Object> variables = new HashMap<>();
 
-      if (!condition.title().isEmpty()) {
-        variables.put("titles", List.of(condition.title()));
+      if (!condition.titles().isEmpty()) {
+        variables.put("titles", condition.titles());
       }
       if (!condition.seasons().isEmpty()) {
         variables.put("seasons", condition.seasons());
@@ -143,13 +150,11 @@ public interface IAnnictDef extends IAnnictClient {
         }
 
         // 先に優先局と初回を確定する。未来の放送を初回として拾い直さない。
-        FirstBroadcast first = firstBroadcast(id, priorities);
-        if (first == null) {
-          continue;
-        }
+        FirstBroadcast first = firstBroadcast(id, priorities, work.path("programs"));
 
         // 選定済みの初回放送が、指定された日時条件を満たすか判定する。
-        if (condition.minimumStartsAt() != null || condition.futureOnly()) {
+        if (first != null && first.startsAt() != null
+            && (condition.minimumStartsAt() != null || condition.futureOnly())) {
 
           var start = first.startsAt().toInstant();
 
@@ -184,83 +189,54 @@ public interface IAnnictDef extends IAnnictClient {
   // ###########################################################################
   // MARK: 優先局と初回放送の選定
 
-  /** 指定作品の優先局での初回放送情報を返し、指定局の放送がなければnullを返す。 */
-  private FirstBroadcast firstBroadcast(int workId, List<Integer> priorities) {
-
-    // 下位の局の初回も保持し、上位の局が見つからなかった場合の候補にする。
+  /** 優先局の初回放送を選ぶ。欠損した項目はnullのまま保持する。 */
+  private FirstBroadcast firstBroadcast(int workId, List<Integer> priorities, JsonNode programs) {
     Map<Integer, FirstBroadcast> firstByChannel = new HashMap<>();
+    FirstBroadcast unknownChannel = null;
     var cursors = new HashSet<String>();
 
-    String after = null;
-    do {
-
-      // この作品の放送データだけをページングする。
-      Map<String, Object> variables = new HashMap<>();
-      variables.put("ids", List.of(workId));
-
-      if (after != null) {
-        variables.put("after", after);
-      }
-
-      // 検索中に作品が取得できなくなった場合は、放送情報なしと区別してエラーにする。
-      JsonNode works = nodes(request(PROGRAMS_QUERY, variables).path("searchWorks"));
-
-      if (works.size() != 1) {
-        throw new AnimeSearchException("Annict work disappeared during search");
-      }
-
-      JsonNode programs = works.get(0).path("programs");
-
+    while (true) {
       for (JsonNode program : nodes(programs)) {
-
         JsonNode channel = program.path("channel");
         int channelId = channel.path("annictId").asInt();
+        // 判明している指定外の局は採用しない。局自体が不明なら補足候補として保持する。
+        if (channelId > 0 && !priorities.contains(channelId)) continue;
 
-        // 指定外の局と、初回をすでに確保した局の後続放送は使わない。
-        if (!priorities.contains(channelId) || firstByChannel.containsKey(channelId)) {
-          continue;
-        }
-
-        // 局名や日時が未登録の放送枠は、初回放送の候補から除く。
-        String channelName = channel.path("name").asText("");
-        String startedAt = program.path("startedAt").asText("");
-        if (channelName.isBlank() || startedAt.isBlank()) {
-          continue;
-        }
-
-        // 日時を解釈できない放送枠も除外し、ほかの候補の確認を続ける。
-        OffsetDateTime startsAt;
+        String name = channel.path("name").asText("");
+        java.time.ZonedDateTime startsAt = null;
         try {
-          startsAt = OffsetDateTime.parse(startedAt);
-        } catch (DateTimeParseException e) {
+          startsAt = OffsetDateTime.parse(program.path("startedAt").asText(""))
+            .atZoneSameInstant(ZoneId.of("Asia/Tokyo"));
+        } catch (DateTimeParseException ignored) {
+          // 欠損・解釈できない日時は不明のまま残す。
+        }
+        var candidate = new FirstBroadcast(Math.max(0, channelId), name.isBlank() ? null : name, startsAt);
+        if (channelId <= 0) {
+          if (unknownChannel == null || unknownChannel.startsAt() == null) unknownChannel = candidate;
           continue;
         }
 
-        // TSVの日付・時刻・曜日を同じ基準で取り出せるよう、日本時間に揃える。
-        var first = new FirstBroadcast(
-          channelId,
-          channelName,
-          startsAt.atZoneSameInstant(ZoneId.of("Asia/Tokyo"))
-        );
-
-        firstByChannel.put(channelId, first);
-
-        // 日時昇順なので最優先局が見つかれば、それがその局の初回。後続ページは不要。
-        if (channelId == priorities.getFirst()) {
-          return first;
+        var previous = firstByChannel.get(channelId);
+        if (previous == null || previous.startsAt() == null) {
+          firstByChannel.put(channelId, candidate);
         }
+        // 日時昇順の最優先局が確定した場合は、続きの取得を省略できる。
+        if (channelId == priorities.getFirst() && startsAt != null) return candidate;
       }
 
-      // 最優先局が未確定なら、次ページの放送枠も確認する。
-      after = nextCursor(programs, cursors);
-    } while (after != null);
+      String after = nextCursor(programs, cursors);
+      if (after == null) break;
+      JsonNode works = nodes(request(PROGRAMS_QUERY,
+        Map.of("ids", List.of(workId), "after", after)).path("searchWorks"));
+      if (works.size() != 1) throw new AnimeSearchException("Annict work disappeared during search");
+      programs = works.get(0).path("programs");
+    }
 
-    // 最優先局がなければ、取得できた指定局の中から順位で選ぶ。全局なければ未定。
-    return priorities.stream()
-      .map(firstByChannel::get)
-      .filter(Objects::nonNull)
-      .findFirst()
-      .orElse(null);
+    // 局の優先度は日時の有無より優先する。指定局がなければ局不明の情報を使う。
+    for (int channelId : priorities) {
+      if (firstByChannel.containsKey(channelId)) return firstByChannel.get(channelId);
+    }
+    return unknownChannel;
   }
 
   // ###########################################################################
