@@ -32,13 +32,13 @@ class CommandDefRegistryTest {
   }
 
   @Test
-  void mapsCompleteSwitchWithOtherOptionsAndRejectsValuesOrDuplicates() {
+  void mapsAllSwitchWithOtherOptionsAndRejectsValuesOrDuplicates() {
     assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("anime"), null, true)),
-      map("/find #word anime #complete"));
+      map("/find #word anime #all"));
     var from = OffsetDateTime.parse("2026-10-01T00:00:00+09:00");
     assertEquals(IResult.ok(new FindInput(Format.MD, List.of("a", "b"), from, true)),
-      map("/find #complete #format md #word a, b #from 2026-10-01T00:00"));
-    for (String suffix : List.of("#complete true", "#complete false", "#complete #complete")) {
+      map("/find #all #format md #word a, b #from 2026-10-01T00:00"));
+    for (String suffix : List.of("#all true", "#all false", "#all #all")) {
       assertInstanceOf(IResult.Err.class, map("/find #word anime " + suffix));
     }
   }
@@ -66,7 +66,7 @@ class CommandDefRegistryTest {
     }
     assertEquals(IResult.ok(new FindInput(Format.MD, List.of("a", "b"),
         OffsetDateTime.parse("2028-02-29T00:00:00+09:00"), true)),
-      map("/find #format md #word a, b #from 2028-02-29 #complete"));
+      map("/find #format md #word a, b #from 2028-02-29 #all"));
     assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("a", "b"),
         OffsetDateTime.parse("2026-10-01T00:00:00+09:00"))),
       map("/find #from 2026-10\na\nb"));

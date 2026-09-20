@@ -9,8 +9,8 @@ public sealed interface IInput {
   public static record HelpInput(String cmd) implements IInput {};
 
 
-  /** from は初回放送日時の下限。complete は日時と局名が揃った作品だけを出力する。 */
-  public static record FindInput(Format fmt, List<String> words, OffsetDateTime from, boolean complete) implements IInput {
+  /** from は初回放送日時の下限。all は日時や局名が不明な作品も出力する。 */
+  public static record FindInput(Format fmt, List<String> words, OffsetDateTime from, boolean all) implements IInput {
 
     public FindInput(Format fmt, List<String> words, OffsetDateTime from) {
       this(fmt, words, from, false);

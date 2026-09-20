@@ -51,7 +51,7 @@ public class FindCommandDef implements ICommandDef {
       /find #word ぼく #from 2026-10-01T00:00
       /find #word ぼく #from 2026-10
       /find #format md #word ぼく
-      /find #word ぼく #complete
+      /find #word ぼく #all
       
       /find
       ぼく
@@ -74,11 +74,12 @@ public class FindCommandDef implements ICommandDef {
       2026-10-01（時刻省略）や2026-10（日・時刻省略）も指定できます。
       省略した日は1日、時刻は00:00として扱います。
       時差の指定がなければ日本時間として扱います。
-      放送日時・放送局の不明な欄はUnknowと表示します。日時不明の作品は日時条件でも残します。
+      #all 指定時は、日時不明の作品も日時条件で除外せず表示します。
 
-      - complete (任意・値なしのスイッチ)
-      #complete を指定すると、放送日時・放送局が揃った作品だけを表示します。
-      公式URLの有無は判定に含めません。省略時は不明な欄をUnknowとして表示します。
+      - all (任意・値なしのスイッチ)
+      省略時は、放送日時・放送局が揃った作品だけを表示します。
+      #all を指定すると、不明な情報がある作品も表示し、不明な欄はN/Aとします。
+      公式URLの有無は判定に含めません。検索語・日時・放送局の条件は引き続き適用します。
       """.formatted(List.of(Format.values()).toString());
   }
 
@@ -106,10 +107,10 @@ public class FindCommandDef implements ICommandDef {
     if(fromResult instanceof IResult.Err) return fromResult.err();
     var from = fromResult.ok().val().map(OffsetDateTime::from).orElse(null);
 
-    var completeResult = reader.readSwitch("complete");
-    if(completeResult instanceof IResult.Err) return completeResult.err();
+    var allResult = reader.readSwitch("all");
+    if(allResult instanceof IResult.Err) return allResult.err();
 
     // コマンド作成
-    return IResult.ok(new FindInput(fmt, word.get(), from, completeResult.ok().val().orElse(false)));
+    return IResult.ok(new FindInput(fmt, word.get(), from, allResult.ok().val().orElse(false)));
   }
 }

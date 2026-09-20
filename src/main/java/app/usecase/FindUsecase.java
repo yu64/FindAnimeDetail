@@ -66,7 +66,7 @@ public class FindUsecase {
     var works = new LinkedHashMap<Integer, Anime>();
     for (Anime work : annict.search(condition, config.channelPriority())) {
       var first = work.firstBroadcast();
-      if (input.complete() && (first == null || first.startsAt() == null
+      if (!input.all() && (first == null || first.startsAt() == null
           || first.channelName() == null || first.channelName().isBlank())) {
         continue;
       }
@@ -108,7 +108,7 @@ public class FindUsecase {
     var markdown = new StringJoiner("\n");
     markdown.add("# アニメ検索結果").add("");
     markdown.add("**" + works.size() + " 作品** · 日時は日本時間").add("");
-    markdown.add("> Unknow：作品の存在は確認できましたが、該当する放送情報は不明です。").add("");
+    markdown.add("> N/A：作品の存在は確認できましたが、該当する放送情報は不明です。").add("");
     markdown.add("| 作品 | 初回放送 | 放送局 | 公式サイト |");
     markdown.add("| :--- | :--- | :--- | :---: |");
 
@@ -132,7 +132,7 @@ public class FindUsecase {
       // 局名やタイトルの記号をエスケープして、表の列や書式の崩れを防ぐ。
       markdown.add("| " + String.join(" | ",
         "[" + toMarkdownCell(work.title()) + "](https://annict.com/works/" + work.annictId() + ")",
-        startsAt == null ? "Unknow" : DATE.format(startsAt) + "（" + DAY.format(startsAt) + "） " + TIME.format(startsAt),
+        startsAt == null ? "N/A" : DATE.format(startsAt) + "（" + DAY.format(startsAt) + "） " + TIME.format(startsAt),
         toMarkdownCell(channelName(first)), link) + " |");
     }
 
@@ -187,9 +187,9 @@ public class FindUsecase {
 
     // 列順を固定し、公式URLが未登録でも末尾の空欄を残す。
     return String.join("\t",
-      startsAt == null ? "Unknow" : DATE.format(startsAt),
-      startsAt == null ? "Unknow" : TIME.format(startsAt),
-      startsAt == null ? "Unknow" : DAY.format(startsAt),
+      startsAt == null ? "N/A" : DATE.format(startsAt),
+      startsAt == null ? "N/A" : TIME.format(startsAt),
+      startsAt == null ? "N/A" : DAY.format(startsAt),
       toTsvCell(channelName(first)),
       toTsvCell(work.title()),
       work.officialSiteUrl() == null ? "" : toTsvCell(work.officialSiteUrl().toString())
@@ -198,7 +198,7 @@ public class FindUsecase {
 
   private String channelName(IAnnictClient.FirstBroadcast first) {
     return first == null || first.channelName() == null || first.channelName().isBlank()
-      ? "Unknow" : first.channelName();
+      ? "N/A" : first.channelName();
   }
 
   /** タブと改行を空白へ置き換え、外部データによるTSVの列・行の崩れを防ぐ。 */

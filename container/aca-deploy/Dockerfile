@@ -1,8 +1,8 @@
 # 共通のビルド環境。実行用イメージにはこのステージのツールを含めない。
 FROM ubuntu:24.04 AS sources
 
-# ローカルおよび native-image プラグインと互換性のある proto バージョン。
-ARG PROTO_VERSION=0.59.0
+# native-image プラグインが要求する proto 0.60 以降を使用する。
+ARG PROTO_VERSION=0.62.2
 
 # ビルド用ライブラリと、Azure CLI の導入に必要な Python。
 RUN apt-get update && apt-get install -y --no-install-recommends \

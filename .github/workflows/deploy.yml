@@ -1,0 +1,184 @@
+name: Deploy to Azure Container Apps
+run-name: ACA ${{ inputs.mode }} / ${{ github.ref_name }}
+
+# 手動実行のみ。初回の GHCR 公開設定用に、ビルド・公開だけでも実行できる。
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 実行方式
+        type: choice
+        options: [native, jvm]
+        default: native
+        required: true
+      publish_only:
+        description: イメージ公開のみ（初回の GHCR 公開設定時に使用）
+        type: boolean
+        default: false
+
+# 同じリポジトリからのデプロイを直列化し、進行中のデプロイは中断しない。
+concurrency:
+  group: aca-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+
+    # 秘密値はデプロイのステップだけに渡す。イメージには含めない。
+    env:
+      AZURE_CORE_OUTPUT: none
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      ACA_APP_NAME: ${{ vars.ACA_APP_NAME || 'find-anime-detail' }}
+      ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME || format('{0}-env', vars.ACA_APP_NAME || 'find-anime-detail') }}
+      AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'japaneast' }}
+      ACA_RESOURCE_SIZE: ${{ vars.ACA_RESOURCE_SIZE || 'small' }}
+      ANNICT_API_CHANNEL_PRIORITY: ${{ vars.ANNICT_API_CHANNEL_PRIORITY || '19,188,7,5,4,6,3,2,1' }}
+      ANNICT_API_URL: ${{ vars.ANNICT_API_URL || 'https://api.annict.com/graphql' }}
+      LINE_API_BASE_URL: ${{ vars.LINE_API_BASE_URL || 'https://api.line.me' }}
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
+
+    steps:
+      # 手動実行で選択したブランチ・タグのソースを使う。
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Check deployment settings
+        if: ${{ !inputs.publish_only }}
+        env:
+          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ANNICT_API_TOKEN: ${{ secrets.ANNICT_API_TOKEN }}
+          LINE_BOT_CHANNEL_SECRET: ${{ secrets.LINE_BOT_CHANNEL_SECRET }}
+          LINE_BOT_CHANNEL_TOKEN: ${{ secrets.LINE_BOT_CHANNEL_TOKEN }}
+        run: |
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP ANNICT_API_TOKEN LINE_BOT_CHANNEL_SECRET LINE_BOT_CHANNEL_TOKEN; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::$name is required in production environment settings."
+              exit 1
+            fi
+          done
+
+      # コミット・実行方式・実行ID・再実行番号でイメージを識別する。
+      - name: Set image reference
+        id: image
+        env:
+          BUILD_MODE: ${{ inputs.mode }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          tag="sha-${GITHUB_SHA}-${BUILD_MODE}-run${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "name=$image" >> "$GITHUB_OUTPUT"
+          echo "tag=$image:$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Dockerfile 内のテストが成功した場合だけ最終イメージを公開する。
+      - name: Build and publish
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: container/aca-deploy/Dockerfile
+          target: ${{ inputs.mode }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.image.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=aca-${{ inputs.mode }}
+          cache-to: type=gha,mode=max,scope=aca-${{ inputs.mode }}
+
+      - name: Record published image
+        env:
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          echo "CONTAINER_IMAGE=${IMAGE_NAME}@${IMAGE_DIGEST}" >> "$GITHUB_ENV"
+          {
+            echo '### Published image'
+            echo "Tag: \`$IMAGE_TAG\`"
+            echo "Image: \`${IMAGE_NAME}@${IMAGE_DIGEST}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ACA はレジストリ認証を設定しないため、匿名で取得できることを確認する。
+      - name: Check public image access
+        if: ${{ !inputs.publish_only }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/anonymous-docker"
+          if ! docker --config "$RUNNER_TEMP/anonymous-docker" manifest inspect "$CONTAINER_IMAGE" > /dev/null; then
+            echo '::error::GHCR image is not anonymously accessible. Set the package visibility to Public, then rerun the workflow.'
+            exit 1
+          fi
+
+      # production Environment を信頼する OIDC で Azure にログインする。
+      - name: Login to Azure
+        if: ${{ !inputs.publish_only }}
+        uses: Azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # ローカルの proto は使わず、ランナーの Azure CLI と指定版の Bicep を使う。
+      - name: Install Bicep CLI
+        if: ${{ !inputs.publish_only }}
+        run: az bicep install --version v0.47.16
+
+      - name: Deploy Bicep
+        if: ${{ !inputs.publish_only }}
+        env:
+          ANNICT_API_TOKEN: ${{ secrets.ANNICT_API_TOKEN }}
+          LINE_BOT_CHANNEL_SECRET: ${{ secrets.LINE_BOT_CHANNEL_SECRET }}
+          LINE_BOT_CHANNEL_TOKEN: ${{ secrets.LINE_BOT_CHANNEL_TOKEN }}
+          ACA_DEPLOYMENT_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          az deployment group create \
+            --name "$ACA_DEPLOYMENT_ID" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --parameters container/aca-deploy/main.bicepparam \
+            --query properties.outputs --output json > "$RUNNER_TEMP/aca-outputs.json"
+          app_url=$(jq -er '.appUrl.value' "$RUNNER_TEMP/aca-outputs.json")
+          webhook_url=$(jq -er '.webhookUrl.value' "$RUNNER_TEMP/aca-outputs.json")
+          echo "APP_URL=$app_url" >> "$GITHUB_ENV"
+          {
+            echo '### Deployment'
+            echo "App: $app_url"
+            echo "LINE Webhook: $webhook_url"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 起動待ちを含めて再試行し、公開 URL の応答を確認する。
+      - name: Check HTTP response
+        if: ${{ !inputs.publish_only }}
+        timeout-minutes: 6
+        run: |
+          curl --fail --silent --show-error \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 300 \
+            --connect-timeout 10 --max-time 30 \
+            "$APP_URL/api/sample" --output "$RUNNER_TEMP/aca-response.txt"
+          test "$(cat "$RUNNER_TEMP/aca-response.txt")" = 'Hello from RESTEasy Reactive'
+          echo 'HTTP response verified.' >> "$GITHUB_STEP_SUMMARY"

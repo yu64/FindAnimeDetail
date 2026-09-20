@@ -42,7 +42,7 @@ class FindUsecaseTest {
     };
 
     var from = OffsetDateTime.parse("2026-10-01T00:00:00+09:00");
-    String result = new FindUsecase(client, config).run(new FindInput(Format.TSV, List.of("A", "B", " A "), from));
+    String result = new FindUsecase(client, config).run(new FindInput(Format.TSV, List.of("A", "B", " A "), from, true));
 
     assertEquals(List.of(
       new SearchCondition(List.of("A", "B"), List.of(), from, false)), calls);
@@ -50,7 +50,7 @@ class FindUsecaseTest {
       "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
       "2026-10-03\t01:00\t土\tTOKYO MX\t作品A\thttps://example.com/anime",
       "2026-10-03\t01:00\t土\tTOKYO MX\t作品B\t",
-      "Unknow\tUnknow\tUnknow\tUnknow\t劇場版A\t"), result);
+      "N/A\tN/A\tN/A\tN/A\t劇場版A\t"), result);
   }
 
   @Test
@@ -64,12 +64,12 @@ class FindUsecaseTest {
       new Anime(6, "不明B", null, new FirstBroadcast(19, "局", null)));
     var usecase = new FindUsecase(client, config);
     var expected = List.of("月曜朝A", "月曜朝B", "月曜夜", "日曜", "不明A", "不明B");
-    var tsv = usecase.run(new FindInput(Format.TSV, List.of("作品")));
+    var tsv = usecase.run(new FindInput(Format.TSV, List.of("作品"), null, true));
     assertEquals(expected, tsv.lines().skip(1).map(row -> row.split("\t")[4]).toList());
-    var markdown = decodeViewerUrl(usecase.run(new FindInput(Format.MD, List.of("作品"))));
+    var markdown = decodeViewerUrl(usecase.run(new FindInput(Format.MD, List.of("作品"), null, true)));
     assertEquals(expected, markdown.lines().filter(row -> row.startsWith("| ["))
       .map(row -> row.substring(3, row.indexOf("](https://annict.com/works/"))).toList());
-    var complete = usecase.run(new FindInput(Format.TSV, List.of("作品"), null, true));
+    var complete = usecase.run(new FindInput(Format.TSV, List.of("作品")));
     assertEquals(expected.subList(0, 4), complete.lines().skip(1).map(row -> row.split("\t")[4]).toList());
   }
 
@@ -109,7 +109,7 @@ class FindUsecaseTest {
   }
 
   @Test
-  void completeFiltersMissingFieldsInBothFormatsButKeepsMissingOfficialUrl() throws Exception {
+  void defaultsToCompleteBroadcastsAndAllIncludesMissingFieldsInBothFormats() throws Exception {
     var date = ZonedDateTime.parse("2026-10-01T12:00:00+09:00");
     IAnnictClient client = (condition, priorities) -> List.of(
       new Anime(1, "詳細あり", null, new FirstBroadcast(19, "TOKYO MX", date)),
@@ -118,24 +118,29 @@ class FindUsecaseTest {
       new Anime(4, "局なし", null, new FirstBroadcast(0, null, date)),
       new Anime(5, "局空白", null, new FirstBroadcast(19, " ", date)));
     var usecase = new FindUsecase(client, config);
-    var tsv = usecase.run(new FindInput(Format.TSV, List.of("作品"), null, true));
+    var tsv = usecase.run(new FindInput(Format.TSV, List.of("作品")));
     assertEquals(2, tsv.lines().count());
     assertTrue(tsv.endsWith("2026-10-01\t12:00\t木\tTOKYO MX\t詳細あり\t"));
-    var markdown = decodeViewerUrl(usecase.run(new FindInput(Format.MD, List.of("作品"), null, true)));
+    var markdown = decodeViewerUrl(usecase.run(new FindInput(Format.MD, List.of("作品"))));
     assertTrue(markdown.contains("**1 作品**"));
     assertTrue(markdown.contains("[詳細あり](https://annict.com/works/1)"));
     for (String excluded : List.of("放送なし", "日時なし", "局なし", "局空白")) {
       assertFalse(markdown.contains(excluded));
     }
-    assertEquals(6, usecase.run(new FindInput(Format.TSV, List.of("作品"))).lines().count());
+    assertEquals(6, usecase.run(new FindInput(Format.TSV, List.of("作品"), null, true)).lines().count());
+    var allMarkdown = decodeViewerUrl(usecase.run(new FindInput(Format.MD, List.of("作品"), null, true)));
+    assertTrue(allMarkdown.contains("**5 作品**"));
+    for (String included : List.of("詳細あり", "放送なし", "日時なし", "局なし", "局空白")) {
+      assertTrue(allMarkdown.contains(included));
+    }
   }
 
   @Test
-  void completeReportsNoMatchesWhenAllBroadcastsAreUnknown() throws Exception {
+  void defaultsToNoMatchesWhenAllBroadcastsAreUnknown() throws Exception {
     var usecase = new FindUsecase((condition, priorities) -> List.of(new Anime(1, "不明", null, null)), config);
     assertEquals("放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
-      usecase.run(new FindInput(Format.TSV, List.of("作品"), null, true)));
-    assertTrue(decodeViewerUrl(usecase.run(new FindInput(Format.MD, List.of("作品"), null, true)))
+      usecase.run(new FindInput(Format.TSV, List.of("作品"))));
+    assertTrue(decodeViewerUrl(usecase.run(new FindInput(Format.MD, List.of("作品"))))
       .endsWith("該当する作品はありません。"));
   }
 
@@ -146,10 +151,10 @@ class FindUsecaseTest {
       new Anime(2, "局未定", null, new FirstBroadcast(19, " ", ZonedDateTime.parse("2026-10-01T12:00:00+09:00"))),
       new Anime(3, "局なし", null, null));
     assertEquals(String.join("\n", "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
-      "2026-10-01\t12:00\t木\tUnknow\t局未定\t",
-      "Unknow\tUnknow\tUnknow\t局\t日時未定\t",
-      "Unknow\tUnknow\tUnknow\tUnknow\t局なし\t"),
-      new FindUsecase(client, config).run(new FindInput(Format.TSV, List.of("A"))));
+      "2026-10-01\t12:00\t木\tN/A\t局未定\t",
+      "N/A\tN/A\tN/A\t局\t日時未定\t",
+      "N/A\tN/A\tN/A\tN/A\t局なし\t"),
+      new FindUsecase(client, config).run(new FindInput(Format.TSV, List.of("A"), null, true)));
   }
 
   @Test
@@ -170,16 +175,16 @@ class FindUsecaseTest {
     IAnnictClient client = (condition, priorities) -> List.of(
       new Anime(1, "作品*特別*\n続編", URI.create("https://example.com/a(b)?x=1&y=2"), broadcast),
       new Anime(2, "URLなし", null, null));
-    String result = new FindUsecase(client, config).run(new FindInput(Format.MD, List.of("A")));
+    String result = new FindUsecase(client, config).run(new FindInput(Format.MD, List.of("A"), null, true));
     String markdown = decodeViewerUrl(result);
     assertEquals(String.join("\n",
       "# アニメ検索結果", "",
       "**2 作品** · 日時は日本時間", "",
-      "> Unknow：作品の存在は確認できましたが、該当する放送情報は不明です。", "",
+      "> N/A：作品の存在は確認できましたが、該当する放送情報は不明です。", "",
       "| 作品 | 初回放送 | 放送局 | 公式サイト |",
       "| :--- | :--- | :--- | :---: |",
       "| [作品\\*特別\\* 続編](https://annict.com/works/1) | 2026-10-03（土） 01:00 | 局\\|名 | [公式サイト](<https://example.com/a(b)?x=1&y=2>) |",
-      "| [URLなし](https://annict.com/works/2) | Unknow | Unknow | — |"), markdown);
+      "| [URLなし](https://annict.com/works/2) | N/A | N\\/A | — |"), markdown);
   }
 
   @Test
