@@ -128,13 +128,6 @@ GitHub Actions を手動実行し、GHCR へのイメージ公開と Azure Conta
 | `ANNICT_API_TOKEN` | Annict のアクセストークン。 |
 | `LINE_BOT_CHANNEL_SECRET` | LINE Messaging API チャネルの Channel secret。 |
 | `LINE_BOT_CHANNEL_TOKEN` | LINE Messaging API のチャネルアクセストークン。 |
-
-### 必須 Variables
-
-同じ `production` の Environment variables に登録します。
-
-| 名前 | 設定する値 |
-| --- | --- |
 | `AZURE_CLIENT_ID` | OIDC 認証に使用する Microsoft Entra アプリまたはマネージド ID のクライアント ID。 |
 | `AZURE_TENANT_ID` | Azure のテナント ID。 |
 | `AZURE_SUBSCRIPTION_ID` | デプロイ先のサブスクリプション ID。 |

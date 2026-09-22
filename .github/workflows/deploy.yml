@@ -40,7 +40,6 @@ jobs:
     # 秘密値はデプロイのステップだけに渡す。イメージには含めない。
     env:
       AZURE_CORE_OUTPUT: none
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
       ACA_APP_NAME: ${{ vars.ACA_APP_NAME || 'find-anime-detail' }}
       ACA_ENVIRONMENT_NAME: ${{ vars.ACA_ENVIRONMENT_NAME || format('{0}-env', vars.ACA_APP_NAME || 'find-anime-detail') }}
       AZURE_LOCATION: ${{ vars.AZURE_LOCATION || 'japaneast' }}
@@ -60,9 +59,10 @@ jobs:
       - name: Check deployment settings
         if: ${{ !inputs.publish_only }}
         env:
-          AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-          AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-          AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ANNICT_API_TOKEN: ${{ secrets.ANNICT_API_TOKEN }}
           LINE_BOT_CHANNEL_SECRET: ${{ secrets.LINE_BOT_CHANNEL_SECRET }}
           LINE_BOT_CHANNEL_TOKEN: ${{ secrets.LINE_BOT_CHANNEL_TOKEN }}
@@ -140,9 +140,9 @@ jobs:
         if: ${{ !inputs.publish_only }}
         uses: Azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # ローカルの proto は使わず、ランナーの Azure CLI と指定版の Bicep を使う。
       - name: Install Bicep CLI
@@ -152,6 +152,7 @@ jobs:
       - name: Deploy Bicep
         if: ${{ !inputs.publish_only }}
         env:
+          AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
           ANNICT_API_TOKEN: ${{ secrets.ANNICT_API_TOKEN }}
           LINE_BOT_CHANNEL_SECRET: ${{ secrets.LINE_BOT_CHANNEL_SECRET }}
           LINE_BOT_CHANNEL_TOKEN: ${{ secrets.LINE_BOT_CHANNEL_TOKEN }}
