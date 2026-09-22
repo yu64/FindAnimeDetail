@@ -90,8 +90,8 @@ resource appEnv 'Microsoft.App/managedEnvironments@2025-07-01' = {
   location: location
   properties: {
     appLogsConfiguration: {
-      // ログを保存しない
-      destination: 'none'
+      // ログを保存しない。API には文字列 'none' ではなく null を渡す。
+      destination: null
     } 
     workloadProfiles: [
       // Consumption方式を準備
