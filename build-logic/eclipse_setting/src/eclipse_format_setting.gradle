@@ -15,6 +15,10 @@ spotless {
     // check / build に spotlessCheck を含め、書式違反でビルドを失敗させる。
     enforceCheck = true
 
+    // .gitattributes と同じ LF に固定する。
+    // 既定（git の設定を参照）では、.git の無い Docker ビルドで OS の改行に依存してしまう。
+    lineEndings = com.diffplug.spotless.LineEnding.UNIX
+
     java {
         target("src/*/java/**/*.java")
 
