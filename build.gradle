@@ -32,6 +32,13 @@ dependencies {
     testRuntimeOnly "org.junit.platform:junit-platform-launcher"
     // Quarkusを起動せずにConfigMappingを生成する単体テスト用
     testRuntimeOnly "org.ow2.asm:asm"
+
+    // モックテストで LINE・Annict の代わりをするモックサーバー (WireMock の Dev Service)
+    testImplementation "io.quarkiverse.wiremock:quarkus-wiremock:1.8.1"
+    testImplementation "io.quarkiverse.wiremock:quarkus-wiremock-test:1.8.1"
+
+    // モックテストから HTTP リクエストを送る
+    testImplementation "io.rest-assured:rest-assured"
 }
 
 tasks.test {
