@@ -26,6 +26,7 @@ RUN proto use
 COPY gradlew settings.gradle build.gradle gradle.properties ./
 COPY gradle/ ./gradle/
 COPY build-logic/ ./build-logic/
+COPY .vscode/eclipse-formatter.xml ./.vscode/
 COPY src/ ./src/
 
 # JVM 版のビルドステージ。

@@ -1,0 +1,25 @@
+# エディター共通の書式設定。規約の詳細は docs/コード規約.md を参照。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Java はスペース2つ。整形は Spotless (gradlew spotlessApply) で行う。
+[*.java]
+indent_style = space
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+# Windows のスクリプトは CRLF のまま扱う。
+[*.{bat,cmd}]
+end_of_line = crlf
+
+# Markdown の行末スペース2つは改行の意味を持つため削除しない。
+[*.md]
+trim_trailing_whitespace = false

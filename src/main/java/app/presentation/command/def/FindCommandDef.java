@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.ResolverStyle;
 import java.time.temporal.ChronoField;
 import java.util.Locale;
+import java.util.stream.Stream;
 
 import app.presentation.command.parse.CommandElementReader;
 import app.presentation.command.parse.CommandExpression;
@@ -20,20 +21,25 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped 
 public class FindCommandDef implements ICommandDef {
 
-  /** 日・時刻・時差の省略値を補完し、どの形式もOffsetDateTimeへ変換できるようにする。 */
-  private static final List<DateTimeFormatter> FROM_FORMATTERS = List.of(
-    DateTimeFormatter.ISO_OFFSET_DATE_TIME,
-    DateTimeFormatter.ISO_LOCAL_DATE_TIME,
-    DateTimeFormatter.ISO_LOCAL_DATE,
-    DateTimeFormatter.ofPattern("uuuu-MM", Locale.ROOT)
-  ).stream().map(format -> new DateTimeFormatterBuilder()
-    .append(format)
-    .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)
-    .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
-    .parseDefaulting(ChronoField.OFFSET_SECONDS, ZoneOffset.ofHours(9).getTotalSeconds())
-    .toFormatter(Locale.ROOT)
-    .withResolverStyle(ResolverStyle.STRICT)
-  ).toList();
+  /** from に指定できる形式。どの形式もOffsetDateTimeへ変換できるようにする。 */
+  private static final List<DateTimeFormatter> FROM_FORMATTERS = Stream.of(
+      DateTimeFormatter.ISO_OFFSET_DATE_TIME,
+      DateTimeFormatter.ISO_LOCAL_DATE_TIME,
+      DateTimeFormatter.ISO_LOCAL_DATE,
+      DateTimeFormatter.ofPattern("uuuu-MM", Locale.ROOT))
+      .map(FindCommandDef::withDefaults)
+      .toList();
+
+  /** 日・時刻・時差の省略値を補完する。 */
+  private static DateTimeFormatter withDefaults(DateTimeFormatter format) {
+    return new DateTimeFormatterBuilder()
+        .append(format)
+        .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)
+        .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)
+        .parseDefaulting(ChronoField.OFFSET_SECONDS, ZoneOffset.ofHours(9).getTotalSeconds())
+        .toFormatter(Locale.ROOT)
+        .withResolverStyle(ResolverStyle.STRICT);
+  }
 
   @Override
   public String name() {

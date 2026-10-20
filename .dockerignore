@@ -9,6 +9,7 @@
 !gradle/**
 !build-logic/
 !build-logic/**
+!.vscode/eclipse-formatter.xml
 !src/
 !src/**
 !container/

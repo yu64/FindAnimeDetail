@@ -30,6 +30,7 @@ ENV QUARKUS_HTTP_HOST=0.0.0.0 \
 COPY gradlew settings.gradle build.gradle gradle.properties ./
 COPY gradle/ ./gradle/
 COPY build-logic/ ./build-logic/
+COPY .vscode/eclipse-formatter.xml ./.vscode/
 COPY src/ ./src/
 
 # 両モード共通の起動処理。local.settings.json を環境変数に読み込む。

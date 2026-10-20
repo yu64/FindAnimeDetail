@@ -50,4 +50,8 @@
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.compile.nullAnalysis.mode": "automatic",
     "java.debug.settings.onBuildFailureProceed": true,
+
+    //Javaの整形はSpotlessと同じ設定を使う
+    "java.format.settings.url": ".vscode/eclipse-formatter.xml",
+    "java.format.settings.profile": "FindAnimeDetail",
 }

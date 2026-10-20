@@ -2,6 +2,8 @@
 java = "25"
 quarkus-plugin = "3.37.2"
 quarkus-platform = "3.37.2"
+spotless-plugin = "8.10.4"
+eclipse-formatter = "4.41"
 
 [libraries]
 quarkus-bom = { group = "io.quarkus.platform", name = "quarkus-bom", version.ref = "quarkus-platform" }

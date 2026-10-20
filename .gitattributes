@@ -1,6 +1,10 @@
 #
 # https://help.github.com/articles/dealing-with-line-endings/
 #
+# テキストは作業ツリーでも LF に統一する（core.autocrlf の設定に依存しない）。
+# バイナリは Git が自動判定して変換しない。
+* text=auto eol=lf
+
 # Linux start script should use lf
 /gradlew        text eol=lf
 *.sh            text eol=lf
