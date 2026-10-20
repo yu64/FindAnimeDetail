@@ -44,9 +44,9 @@ RUN bash -e -o pipefail -c 'activation="$(proto activate bash --export)" && eval
 # Native 版のビルドステージ。
 FROM sources AS native-build
 
-# テストと Native ビルドを行う。ビルドマシン固有の CPU 命令への依存を避ける。
+# テスト・Native ビルドと、Native 実行ファイルに対するモックテストを行う。ビルドマシン固有の CPU 命令への依存を避ける。
 RUN bash -e -o pipefail -c 'activation="$(proto activate bash --export)" && eval "$activation" \
-    && bash ./gradlew --no-daemon build \
+    && bash ./gradlew --no-daemon build testNative \
     -Dquarkus.native.enabled=true -Dquarkus.package.jar.enabled=false \
     -Dquarkus.native.march=compatibility -Dquarkus.package.output-name=application'
 
