@@ -12,9 +12,8 @@ plugins {
 // Eclipse フォーマッターによる Java の整形。規約: docs/コード規約.md
 spotless {
 
-    // 一括整形が済むまでは check / build に spotlessCheck を含めない。
-    // 整形後に true へ変更し、違反でビルドを失敗させる。
-    enforceCheck = false
+    // check / build に spotlessCheck を含め、書式違反でビルドを失敗させる。
+    enforceCheck = true
 
     java {
         target("src/*/java/**/*.java")

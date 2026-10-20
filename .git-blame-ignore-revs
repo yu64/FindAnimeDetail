@@ -1,0 +1,6 @@
+# git blame で無視する書式のみのコミット。
+# GitHub は自動で参照する。ローカルでは次を一度実行する:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# 一括整形
+eb06226c6e68b99e30464a5130a18c589155c5f0
