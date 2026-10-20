@@ -7,12 +7,10 @@ import java.util.*;
  * パーサーが返す汎用コマンドのデータ構造
  */
 public record CommandExpression(
-  String command,
-  List<IElement> elements
-) {
+    String command,
+    List<IElement> elements) {
 
-  public CommandExpression
-  {
+  public CommandExpression {
     elements = Collections.unmodifiableList(new ArrayList<>(elements));
   }
 
@@ -28,8 +26,7 @@ public record CommandExpression(
     /**
      * パラメータ構文: #param value
      */
-    record ParamElement(String param, String value) implements IElement {
-    }
+    record ParamElement(String param, String value) implements IElement {}
 
     /**
      * フラットリスト構文: #param val1, val2, ...
@@ -43,17 +40,15 @@ public record CommandExpression(
     /**
      * スイッチ構文: #param
      */
-    record SwitchElement(String param) implements IElement {
-    }
+    record SwitchElement(String param) implements IElement {}
 
     /**
      * 無名値: value （単独）
      */
-    record ValueElement(String value) implements IElement {
-    }
+    record ValueElement(String value) implements IElement {}
 
     /**
-     * リスト構文: 
+     * リスト構文:
      * #param
      * val1
      * val2
@@ -68,8 +63,7 @@ public record CommandExpression(
     /**
      * 準無名パラメータ構文: # value
      */
-    record QuasiUnnamedParamElement(String value) implements IElement {
-    }
+    record QuasiUnnamedParamElement(String value) implements IElement {}
 
     /**
      * 無名フラットリスト構文: val1, val2, ...

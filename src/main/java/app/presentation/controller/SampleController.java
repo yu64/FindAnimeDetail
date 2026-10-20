@@ -10,8 +10,7 @@ public class SampleController {
 
   @GET
   @Produces(MediaType.TEXT_PLAIN)
-  public String hello()
-  {
+  public String hello() {
     return "Hello from RESTEasy Reactive";
   }
 }

@@ -7,10 +7,10 @@ import app.usecase.IInput.HelpInput;
 import app.util.IResult;
 import jakarta.enterprise.context.ApplicationScoped;
 
-@ApplicationScoped 
+@ApplicationScoped
 public class HelpCommandDef implements ICommandDef {
-  
-  
+
+
   @Override
   public String name() {
     return "help";
@@ -30,16 +30,15 @@ public class HelpCommandDef implements ICommandDef {
       /help find
       """;
   }
-  
 
-  @Override 
-  public IResult<IInput, String> map(CommandExpression cmd)
-  {
+
+  @Override
+  public IResult<IInput, String> map(CommandExpression cmd) {
     CommandElementReader reader = new CommandElementReader(cmd);
-    
+
     var cmdName = reader.readStr("command")
-      .map(v -> v.orElse(""));
-      
+        .map(v -> v.orElse(""));
+
     return cmdName.map(v -> new HelpInput(v));
   }
 

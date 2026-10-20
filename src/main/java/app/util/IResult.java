@@ -50,7 +50,7 @@ public sealed interface IResult<T, E> {
   /** 成功値だけを変換する。 */
   public default <U> IResult<U, E> map(Function<? super T, ? extends U> mapper) {
     Objects.requireNonNull(mapper, "mapper");
-    return switch (this) {
+    return switch(this) {
       case Ok(var value) -> IResult.ok(mapper.apply(value));
       case Err(var error) -> IResult.err(error);
     };
@@ -58,10 +58,9 @@ public sealed interface IResult<T, E> {
 
   /** 成功時だけ次の処理を実行する。 */
   public default <U> IResult<U, E> flatMap(
-    Function<? super T, ? extends IResult<U, E>> mapper
-  ) {
+      Function<? super T, ? extends IResult<U, E>> mapper) {
     Objects.requireNonNull(mapper, "mapper");
-    return switch (this) {
+    return switch(this) {
       case Ok(var value) -> Objects.requireNonNull(mapper.apply(value), "result");
       case Err(var error) -> IResult.err(error);
     };
@@ -70,7 +69,7 @@ public sealed interface IResult<T, E> {
   /** エラーだけを変換する。 */
   public default <F> IResult<T, F> mapErr(Function<? super E, ? extends F> mapper) {
     Objects.requireNonNull(mapper, "mapper");
-    return switch (this) {
+    return switch(this) {
       case Ok(var value) -> IResult.ok(value);
       case Err(var error) -> IResult.err(mapper.apply(error));
     };
@@ -78,19 +77,17 @@ public sealed interface IResult<T, E> {
 
   /** 成功・失敗それぞれの処理を指定し、共通の戻り値に変換する。 */
   public default <U> U fold(
-    Function<? super T, ? extends U> onSuccess,
-    Function<? super E, ? extends U> onFailure
-  ) {
+      Function<? super T, ? extends U> onSuccess,
+      Function<? super E, ? extends U> onFailure) {
     Objects.requireNonNull(onSuccess, "onSuccess");
     Objects.requireNonNull(onFailure, "onFailure");
-    return switch (this) {
+    return switch(this) {
       case Ok(var value) -> onSuccess.apply(value);
       case Err(var error) -> onFailure.apply(error);
     };
   }
 
 
-  
   // ###########################################################################
   // MARK: キャスト
 
@@ -115,8 +112,6 @@ public sealed interface IResult<T, E> {
     }
     throw new ClassCastException("Ok cannot be cast to Err");
   }
-
-
 
 
 }

@@ -5,7 +5,7 @@ import app.usecase.IInput;
 import app.util.IResult;
 
 public interface ICommandDef {
-  
+
 
   public String name();
   public String help();

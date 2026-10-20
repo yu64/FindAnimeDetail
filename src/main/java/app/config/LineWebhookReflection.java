@@ -30,5 +30,5 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
     UnknownActionResult.class, VoidActionResult.class
 })
 public final class LineWebhookReflection {
-    private LineWebhookReflection() {}
+  private LineWebhookReflection() {}
 }

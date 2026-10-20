@@ -21,15 +21,13 @@ import jakarta.ws.rs.core.MediaType;
 @RegisterRestClient(configKey = "line-api-base")
 @ClientHeaderParam(name = "Authorization", value = "Bearer ${line-bot-channel-token}")
 public interface ILineClientDef extends ILineClient {
-  
+
 
   /** LINEで相手にテキストで応答する。 */
-  public default void reply(String replyToken, String text)
-  {
+  public default void reply(String replyToken, String text) {
     ReplyPayload payload = new ReplyPayload(
         replyToken,
-        List.of(new LineMessage("text", text))
-    );
+        List.of(new LineMessage("text", text)));
     this.reply(payload);
   }
 
@@ -42,13 +40,11 @@ public interface ILineClientDef extends ILineClient {
 
   /** インターフェイスを明示して再登録する。*/
   @ApplicationScoped
-  public class DiRelay
-  {
+  public class DiRelay {
     @Produces
     @ApplicationScoped
-    public ILineClient relay(@RestClient ILineClientDef v)
-    {
-        return v;
+    public ILineClient relay(@RestClient ILineClientDef v) {
+      return v;
     }
   }
 }

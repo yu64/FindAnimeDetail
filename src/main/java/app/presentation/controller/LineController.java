@@ -37,13 +37,11 @@ public class LineController {
 
   @Inject
   public LineController(
-    ILineClient line,
-    ICommandSyntaxParser parser,
-    CommandDefRegistry registry,
-    HelpUsecase helpUsecase,
-    FindUsecase findUsecase
-  )
-  {
+      ILineClient line,
+      ICommandSyntaxParser parser,
+      CommandDefRegistry registry,
+      HelpUsecase helpUsecase,
+      FindUsecase findUsecase) {
     this.line = line;
     this.parser = parser;
     this.registry = registry;
@@ -54,27 +52,23 @@ public class LineController {
   @POST
   @Consumes(MediaType.APPLICATION_JSON)
   @Path("/webhook")
-  public Response handle(CallbackRequest req)
-  {
-    if(req == null || req.getEvents() == null)
-    {
+  public Response handle(CallbackRequest req) {
+    if(req == null || req.getEvents() == null) {
       return Response.ok().build();
     }
 
     req.getEvents()
-      .parallelStream()
-      .filter(event -> event instanceof MessageEvent<?>)
-      .map(event -> (MessageEvent<?>) event)
-      .forEach(this::onMessage);
+        .parallelStream()
+        .filter(event -> event instanceof MessageEvent<?>)
+        .map(event -> (MessageEvent<?>) event)
+        .forEach(this::onMessage);
 
     return Response.ok().build();
   }
 
   /** 各メッセージごとに呼び出される */
-  private void onMessage(MessageEvent<?> messageEvent)
-  {
-    if(!(messageEvent.getMessage() instanceof TextMessageContent textMessageContent))
-    {
+  private void onMessage(MessageEvent<?> messageEvent) {
+    if(!(messageEvent.getMessage() instanceof TextMessageContent textMessageContent)) {
       return;
     }
 
@@ -84,28 +78,22 @@ public class LineController {
 
     // コマンドパース
     IResult<CommandExpression, String> parseResult = this.parser.parse(userText);
-    if(parseResult instanceof IResult.Err(var error))
-    {
-      var msg = (
-        "コマンドのパースに失敗しました。\n"
-        + "ヘルプが必要な場合は `/help` を実行してください。\n"
-        + "\n"
-        + error
-      );
+    if(parseResult instanceof IResult.Err(var error)) {
+      var msg = ("コマンドのパースに失敗しました。\n"
+          + "ヘルプが必要な場合は `/help` を実行してください。\n"
+          + "\n"
+          + error);
       this.line.reply(replyToken, msg);
       return;
     }
 
     // コマンドパースに成功したら、実在するコマンドにマッピング
     IResult<IInput, String> cmdResult = this.registry.map(parseResult.ok().val());
-    if(cmdResult instanceof IResult.Err(var error))
-    {
-      var msg = (
-        "コマンドのパースに失敗しました。\n"
-        + "ヘルプが必要な場合は `/help` を実行してください。\n"
-        + "\n"
-        + error
-      );
+    if(cmdResult instanceof IResult.Err(var error)) {
+      var msg = ("コマンドのパースに失敗しました。\n"
+          + "ヘルプが必要な場合は `/help` を実行してください。\n"
+          + "\n"
+          + error);
       this.line.reply(replyToken, msg);
       return;
     }
@@ -118,12 +106,12 @@ public class LineController {
         case HelpInput c -> helpUsecase.run(c);
         case FindInput c -> findUsecase.run(c);
       };
-    } catch (AnimeSearchException e) {
+    } catch(AnimeSearchException e) {
       Log.error("Anime search failed", e);
       msg = e.isRateLimited()
-        ? "Annictのアクセス制限により検索できませんでした。しばらく時間を置いてから再検索してください。"
-        : "アニメ情報の取得に失敗しました。しばらく時間を置いてから再検索してください。";
-    } catch (RuntimeException e) {
+          ? "Annictのアクセス制限により検索できませんでした。しばらく時間を置いてから再検索してください。"
+          : "アニメ情報の取得に失敗しました。しばらく時間を置いてから再検索してください。";
+    } catch(RuntimeException e) {
       Log.error("Command execution failed", e);
       msg = "処理中にエラーが発生しました。しばらく時間を置いてから再度お試しください。";
     }

@@ -27,14 +27,11 @@ public class LineCallbackRequestReader implements MessageBodyReader<CallbackRequ
 
   private WebhookParser parser;
 
-  @Inject 
+  @Inject
   public LineCallbackRequestReader(
-    LineConfig lineConfig
-  )
-  {
+      LineConfig lineConfig) {
     final var validator = new LineSignatureValidator(
-      lineConfig.channelSecret().getBytes()
-    );
+        lineConfig.channelSecret().getBytes());
 
     // application.properties から受け取ったSecretでパーサーを初期化
     this.parser = new WebhookParser(validator);
@@ -43,47 +40,36 @@ public class LineCallbackRequestReader implements MessageBodyReader<CallbackRequ
 
   @Override
   public boolean isReadable(
-    Class<?> type,
-    Type genericType,
-    Annotation[] annotations,
-    MediaType mediaType
-  )
-  {
+      Class<?> type,
+      Type genericType,
+      Annotation[] annotations,
+      MediaType mediaType) {
     return (type == CallbackRequest.class);
   }
 
   @Override
   public CallbackRequest readFrom(
-    Class<CallbackRequest> type,
-    Type genericType,
-    Annotation[] annotations,
-    MediaType mediaType,
-    MultivaluedMap<String,
-    String> httpHeaders,
-    InputStream entityStream
-  ) throws IOException, WebApplicationException
-  {
+      Class<CallbackRequest> type,
+      Type genericType,
+      Annotation[] annotations,
+      MediaType mediaType,
+      MultivaluedMap<String, String> httpHeaders,
+      InputStream entityStream) throws IOException, WebApplicationException {
     Log.info("Catch Request");
 
     String signature = httpHeaders.getFirst("x-line-signature");
-    if(signature == null)
-    {
+    if(signature == null) {
       throw new WebApplicationException(Response.Status.UNAUTHORIZED);
     }
 
-    try
-    {
+    try {
       byte[] bodyBytes = entityStream.readAllBytes();
       return this.parser.handle(signature, bodyBytes);
-    }
-    catch(WebhookParseException ex)
-    {
+    } catch(WebhookParseException ex) {
       Log.error("Failed Signature.", ex);
       // 署名検証に失敗した場合は 401 Unauthorized を返す
       throw new WebApplicationException(Response.Status.UNAUTHORIZED);
-    }
-    catch(Exception ex)
-    {
+    } catch(Exception ex) {
       Log.error("Failed Auth.", ex);
       // その他の例外の場合、400 を返す。
       throw new WebApplicationException(Response.Status.BAD_REQUEST);

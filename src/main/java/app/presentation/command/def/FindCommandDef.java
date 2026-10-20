@@ -18,7 +18,7 @@ import app.usecase.IInput.FindInput.Format;
 import app.util.IResult;
 import jakarta.enterprise.context.ApplicationScoped;
 
-@ApplicationScoped 
+@ApplicationScoped
 public class FindCommandDef implements ICommandDef {
 
   /** from に指定できる形式。どの形式もOffsetDateTimeへ変換できるようにする。 */
@@ -58,7 +58,7 @@ public class FindCommandDef implements ICommandDef {
       /find #word ぼく #from 2026-10
       /find #format md #word ぼく
       /find #word ぼく #all
-      
+
       /find
       ぼく
       わたし
@@ -90,8 +90,7 @@ public class FindCommandDef implements ICommandDef {
   }
 
   @Override
-  public IResult<IInput, String> map(CommandExpression cmd)
-  {
+  public IResult<IInput, String> map(CommandExpression cmd) {
     CommandElementReader reader = new CommandElementReader(cmd);
 
     // 各引数の読み取り・型チェック
@@ -100,16 +99,16 @@ public class FindCommandDef implements ICommandDef {
 
     var wordResult = reader.readStrList("word");
     if(wordResult instanceof IResult.Err) return wordResult.err();
-    
+
     // 各引数のデフォルトと必須確認
     var fmt = fmtResult.ok().val()
-      .orElse(Format.TSV);
-    
+        .orElse(Format.TSV);
+
     var word = wordResult.ok().val();
     if(word.isEmpty()) return IResult.err("word は必須です");
 
     var fromResult = reader.readTemporal("from", FROM_FORMATTERS,
-      () -> "from は年月・日付・日時で指定してください（例: 2026-10、2026-10-01、2026-10-01T00:00）");
+        () -> "from は年月・日付・日時で指定してください（例: 2026-10、2026-10-01、2026-10-01T00:00）");
     if(fromResult instanceof IResult.Err) return fromResult.err();
     var from = fromResult.ok().val().map(OffsetDateTime::from).orElse(null);
 

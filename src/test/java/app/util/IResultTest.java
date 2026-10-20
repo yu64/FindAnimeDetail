@@ -29,10 +29,10 @@ class IResultTest {
   @Test
   void chainsSuccessAndStopsAfterFailure() {
     IResult<Integer, String> result = IResult.<String, String>ok("123")
-      .map(Integer::parseInt)
-      .flatMap(value -> IResult.<Integer, String>err("invalid: " + value))
-      .map(value -> fail("map must not run after failure"))
-      .flatMap(value -> fail("flatMap must not run after failure"));
+        .map(Integer::parseInt)
+        .flatMap(value -> IResult.<Integer, String>err("invalid: " + value))
+        .map(value -> fail("map must not run after failure"))
+        .flatMap(value -> fail("flatMap must not run after failure"));
 
     assertEquals(IResult.err("invalid: 123"), result);
   }
@@ -62,6 +62,8 @@ class IResultTest {
   void propagatesCallbackExceptions() {
     var exception = new IllegalArgumentException("callback failed");
     assertSame(exception, assertThrows(IllegalArgumentException.class,
-      () -> IResult.ok(1).map(value -> { throw exception; })));
+        () -> IResult.ok(1).map(value -> {
+          throw exception;
+        })));
   }
 }

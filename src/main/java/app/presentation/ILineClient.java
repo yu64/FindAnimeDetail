@@ -2,8 +2,7 @@ package app.presentation;
 
 import java.util.List;
 
-public interface ILineClient 
-{
+public interface ILineClient {
   public static record LineMessage(String type, String text) {}
   public static record ReplyPayload(String replyToken, List<LineMessage> messages) {}
 

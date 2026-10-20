@@ -15,7 +15,7 @@ public class LoggingFilter implements ContainerRequestFilter {
     // メソッド名とリクエストパスをログ出力
     String method = requestContext.getMethod();
     String path = requestContext.getUriInfo().getPath();
-    
+
     Log.infof("Receive HTTP Request: [%s] %s", method, path);
   }
 }

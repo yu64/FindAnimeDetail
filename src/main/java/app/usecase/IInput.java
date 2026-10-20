@@ -21,8 +21,7 @@ public sealed interface IInput {
     }
 
     public static enum Format {
-      TSV,
-      MD
+      TSV, MD
     }
   };
 
