@@ -8,6 +8,7 @@ import com.linecorp.bot.model.event.postback.PostbackContent;
 import com.linecorp.bot.model.event.source.*;
 import com.linecorp.bot.model.event.things.*;
 import com.linecorp.bot.model.event.things.result.*;
+import com.linecorp.bot.model.objectmapper.StringArrayOrNullDeserializer;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
 /**
@@ -27,7 +28,9 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
     GroupSource.class, RoomSource.class, UnknownSource.class, UserSource.class,
     LinkThingsContent.class, ScenarioResultThingsContent.class, UnlinkThingsContent.class,
     UnknownLineThingsContent.class, BinaryActionResult.class, ScenarioResult.class,
-    UnknownActionResult.class, VoidActionResult.class
+    UnknownActionResult.class, VoidActionResult.class,
+    // StickerMessageContent の keywords で使うデシリアライザー
+    StringArrayOrNullDeserializer.class
 })
 public final class LineWebhookReflection {
   private LineWebhookReflection() {}
