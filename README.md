@@ -26,6 +26,25 @@
 proto use
 ```
 
+### テスト
+
+```powershell
+./gradlew test    # テスト
+./gradlew check   # テスト + 書式チェック（規約: docs/コード規約.md）
+```
+
+- 単体テスト: 各クラスを直接呼び出す。外部APIには接続しない。
+- モックテスト（`LineWebhookMockTest`）: アプリを起動し、署名付きの LINE Webhook を送って返信までを確認する。LINE・Annict の API は WireMock（Dev Service）に置き換えるため、トークンやネットワークは不要。
+  - 接続先とテスト用の秘密値は `application.properties` の `%test.` 設定にある。
+  - ケースを足すときは、Annict の応答を `annictReturnsWorks` などで用意し、`sendText` で送って、`onlyReply` で返信を検証する。
+- 実APIのテスト（`…LiveTest`）: 通常はスキップする。`ANNICT_LIVE_TEST=true` と `ANNICT_API_TOKEN` を設定すると実行する。
+
+依存ライブラリの取得で `PKIX path building failed` が出る場合は、ウイルス対策ソフトなどが HTTPS を検査している可能性がある。Windows の証明書ストアを使うよう指定して実行する。
+
+```powershell
+$env:JAVA_TOOL_OPTIONS = '-Djavax.net.ssl.trustStoreType=Windows-ROOT'
+```
+
 ### 実行 - Container
 #### 前提
 - Docker (Podman)
