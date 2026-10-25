@@ -45,6 +45,11 @@ param lineBotChannelSecret string
 @minLength(1)
 param lineBotChannelToken string
 
+// ボットを利用できる LINE の userId（カンマ区切り）
+@secure()
+@minLength(1)
+param lineBotAllowedUserIds string
+
 // EDCB Material WebUI のベース URL。自宅サーバーの所在を示すため秘密値として扱う
 @secure()
 @minLength(1)
@@ -154,6 +159,10 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
           value: lineBotChannelToken
         }
         {
+          name: 'line-bot-allowed-user-ids'
+          value: lineBotAllowedUserIds
+        }
+        {
           name: 'edcb-api-url'
           value: edcbApiUrl
         }
@@ -190,6 +199,10 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
             {
               name: 'LINE_BOT_CHANNEL_TOKEN'
               secretRef: 'line-bot-channel-token'
+            }
+            {
+              name: 'LINE_BOT_ALLOWED_USER_IDS'
+              secretRef: 'line-bot-allowed-user-ids'
             }
             {
               name: 'EDCB_API_URL'

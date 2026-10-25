@@ -68,8 +68,9 @@ jobs:
           LINE_BOT_CHANNEL_TOKEN: ${{ secrets.LINE_BOT_CHANNEL_TOKEN }}
           EDCB_API_URL: ${{ secrets.EDCB_API_URL }}
           EDCB_API_HEADERS: ${{ secrets.EDCB_API_HEADERS }}
+          LINE_BOT_ALLOWED_USER_IDS: ${{ secrets.LINE_BOT_ALLOWED_USER_IDS }}
         run: |
-          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP ANNICT_API_TOKEN LINE_BOT_CHANNEL_SECRET LINE_BOT_CHANNEL_TOKEN EDCB_API_URL EDCB_API_HEADERS; do
+          for name in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_RESOURCE_GROUP ANNICT_API_TOKEN LINE_BOT_CHANNEL_SECRET LINE_BOT_CHANNEL_TOKEN EDCB_API_URL EDCB_API_HEADERS LINE_BOT_ALLOWED_USER_IDS; do
             if [[ -z "${!name}" ]]; then
               echo "::error::$name is required in production environment settings."
               exit 1
@@ -160,6 +161,7 @@ jobs:
           LINE_BOT_CHANNEL_TOKEN: ${{ secrets.LINE_BOT_CHANNEL_TOKEN }}
           EDCB_API_URL: ${{ secrets.EDCB_API_URL }}
           EDCB_API_HEADERS: ${{ secrets.EDCB_API_HEADERS }}
+          LINE_BOT_ALLOWED_USER_IDS: ${{ secrets.LINE_BOT_ALLOWED_USER_IDS }}
           ACA_DEPLOYMENT_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           az deployment group create \

@@ -6,6 +6,7 @@ import com.linecorp.bot.model.event.MessageEvent;
 import com.linecorp.bot.model.event.message.TextMessageContent;
 
 import app.util.IResult;
+import app.config.LineConfig;
 import app.infrastructure.AnimeSearchException;
 import io.quarkus.logging.Log;
 import app.usecase.IInput.FindInput;
@@ -26,12 +27,14 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.List;
 
 @ApplicationScoped
 @Path("/line")
 public class LineController {
 
   private final ILineClient line;
+  private final LineConfig config;
   private final ICommandSyntaxParser parser;
   private final CommandDefRegistry registry;
   private final HelpUsecase helpUsecase;
@@ -41,12 +44,14 @@ public class LineController {
   @Inject
   public LineController(
       ILineClient line,
+      LineConfig config,
       ICommandSyntaxParser parser,
       CommandDefRegistry registry,
       HelpUsecase helpUsecase,
       FindUsecase findUsecase,
       ReserveUsecase reserveUsecase) {
     this.line = line;
+    this.config = config;
     this.parser = parser;
     this.registry = registry;
     this.helpUsecase = helpUsecase;
@@ -80,6 +85,15 @@ public class LineController {
     // LINEから入力文字列と送信トークンを取得
     String userText = textMessageContent.getText();
     String replyToken = messageEvent.getReplyToken();
+
+    // 許可されたユーザー以外には、コマンドを解釈せず権限がない旨だけを返す。
+    // 拒否したuserIdはログに残し、許可リストへの登録に使えるようにする。
+    String userId = messageEvent.getSource() == null ? null : messageEvent.getSource().getUserId();
+    if(!this.isAllowed(userId)) {
+      Log.warnf("Rejected message from unauthorized user: %s", userId);
+      this.line.reply(replyToken, "このボットを利用する権限がありません。");
+      return;
+    }
 
     // コマンドパース
     IResult<CommandExpression, String> parseResult = this.parser.parse(userText);
@@ -123,5 +137,12 @@ public class LineController {
     }
     // 返信自体の失敗は捕捉して再送しない。同じ返信トークンでの二重送信を避ける。
     this.line.reply(replyToken, msg);
+  }
+
+  /** 許可リストが未設定の場合は、誰も利用できない。 */
+  private boolean isAllowed(String userId) {
+    return userId != null && this.config.allowedUserIds().orElse(List.of()).stream()
+        .map(String::strip)
+        .anyMatch(userId::equals);
   }
 }

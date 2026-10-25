@@ -148,6 +148,17 @@ class LineWebhookMockTest {
   }
 
   @Test
+  void unauthorizedUserIsRejectedWithoutCallingAnnict() throws Exception {
+    annictReturnsWorks(SHIROBAKO);
+
+    sendWebhook(messageEvent(Map.of("type", "text", "id", "1", "text", "/find #word SHIROBAKO"), "other-user"))
+        .then().statusCode(200);
+
+    assertEquals("このボットを利用する権限がありません。", onlyReply().text());
+    assertEquals(0, this.wiremock.find(postRequestedFor(urlEqualTo(ANNICT_PATH))).size());
+  }
+
+  @Test
   void unknownCommandRepliesWithParseError() throws Exception {
     sendText("/unknown");
 
@@ -255,10 +266,15 @@ class LineWebhookMockTest {
 
   /** ユーザーからのメッセージイベントを1件含む Webhook 本文を作る。 */
   private static String messageEvent(Map<String, Object> message) throws Exception {
+    return messageEvent(message, "test-user");
+  }
+
+  /** userId は application.properties の %test.line-bot.allowed-user-ids にあれば許可される。 */
+  private static String messageEvent(Map<String, Object> message, String userId) throws Exception {
     return webhook(Map.of(
         "type", "message", "replyToken", REPLY_TOKEN, "timestamp", 0, "mode", "active",
         "webhookEventId", "test-event", "deliveryContext", Map.of("isRedelivery", false),
-        "source", Map.of("type", "user", "userId", "test-user"),
+        "source", Map.of("type", "user", "userId", userId),
         "message", message));
   }
 

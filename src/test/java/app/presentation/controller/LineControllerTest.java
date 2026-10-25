@@ -3,6 +3,7 @@ package app.presentation.controller;
 import static org.junit.jupiter.api.Assertions.*;
 
 import app.config.AnnictConfig;
+import app.config.LineConfig;
 import app.infrastructure.AnimeSearchException;
 import app.infrastructure.MugCommandSyntaxParser;
 import app.presentation.ILineClient;
@@ -21,6 +22,7 @@ import jakarta.ws.rs.core.Response;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class LineControllerTest {
@@ -36,22 +38,47 @@ class LineControllerTest {
     }
   };
 
+  private final LineConfig lineConfig = new LineConfig() {
+    public String channelSecret() {
+      return "test-secret";
+    }
+    public String channelToken() {
+      return "test-token";
+    }
+    public Optional<List<String>> allowedUserIds() {
+      return Optional.of(List.of(" test-user "));
+    }
+  };
+
   private LineController controller(IAnnictClient annict, ILineClient line) {
     var registry = new CommandDefRegistry(List.of(new FindCommandDef(), new HelpCommandDef()));
-    return new LineController(line, new MugCommandSyntaxParser(), registry,
+    return new LineController(line, lineConfig, new MugCommandSyntaxParser(), registry,
         new HelpUsecase(registry), new FindUsecase(annict, config), new ReserveUsecase());
   }
 
   private CallbackRequest request(String format) throws Exception {
+    return request(format, "test-user");
+  }
+
+  private CallbackRequest request(String format, String userId) throws Exception {
     return new ObjectMapper().findAndRegisterModules()
         .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES).readValue("""
       {"destination":"test","events":[{
         "type":"message","replyToken":"test-reply","timestamp":0,
-        "source":{"type":"user","userId":"test-user"},"mode":"active",
+        "source":{"type":"user","userId":"%s"},"mode":"active",
         "webhookEventId":"test-event","deliveryContext":{"isRedelivery":false},
         "message":{"type":"text","id":"1","text":"/find #format %s #word anime"}
       }]}
-      """.formatted(format), CallbackRequest.class);
+      """.formatted(userId, format), CallbackRequest.class);
+  }
+
+  @Test
+  void unauthorizedUserIsRejectedWithoutRunningCommand() throws Exception {
+    var replies = new ArrayList<String>();
+    var controller = controller((condition, priorities) -> fail("Annict must not be called"),
+        (token, text) -> replies.add(text));
+    assertEquals(200, controller.handle(request("tsv", "other-user")).getStatus());
+    assertEquals(List.of("このボットを利用する権限がありません。"), replies);
   }
 
   @Test

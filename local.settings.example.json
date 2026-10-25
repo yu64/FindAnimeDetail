@@ -10,6 +10,7 @@
     "LINE_BOT_CHANNEL_SECRET": "",
     "LINE_BOT_CHANNEL_TOKEN": "",
     "LINE_API_BASE_URL": "https://api.line.me",
+    "LINE_BOT_ALLOWED_USER_IDS": "",
     "EDCB_API_URL": "",
     "EDCB_API_HEADERS": "{}"
   }

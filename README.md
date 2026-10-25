@@ -154,6 +154,7 @@ GitHub Actions を手動実行し、GHCR へのイメージ公開と Azure Conta
 | `ANNICT_API_TOKEN` | Annict のアクセストークン。 |
 | `LINE_BOT_CHANNEL_SECRET` | LINE Messaging API チャネルの Channel secret。 |
 | `LINE_BOT_CHANNEL_TOKEN` | LINE Messaging API のチャネルアクセストークン。 |
+| `LINE_BOT_ALLOWED_USER_IDS` | ボットを利用できる LINE の userId（カンマ区切り）。ここにないユーザーには、権限がない旨だけを返信する。 |
 | `EDCB_API_URL` | EDCB Material WebUI のベース URL（例: `https://edcb.example.com`）。`/api/...` は含めない。 |
 | `EDCB_API_HEADERS` | EDCB へのリクエストに付けるヘッダーを JSON オブジェクトで指定する。認証が不要なら `{}`。 |
 | `AZURE_CLIENT_ID` | OIDC 認証に使用する Microsoft Entra アプリまたはマネージド ID のクライアント ID。 |
