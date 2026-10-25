@@ -7,6 +7,7 @@ import app.usecase.IAnnictClient.SearchCondition;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -98,7 +99,7 @@ class IAnnictDefTest {
     var first = results.getFirst().firstBroadcast();
     assertEquals(19, first.channelId());
     assertEquals("2026-10-03T01:00+09:00[Asia/Tokyo]", first.startsAt().toString());
-    assertEquals(java.time.DayOfWeek.SATURDAY, first.startsAt().getDayOfWeek());
+    assertEquals(DayOfWeek.SATURDAY, first.startsAt().getDayOfWeek());
     assertEquals("program-next", stub.requests.get(1).variables().get("after"));
     assertEquals("work-next", stub.requests.get(2).variables().get("after"));
     assertEquals(List.of("2026-autumn"), stub.requests.getFirst().variables().get("seasons"));

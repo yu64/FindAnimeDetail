@@ -18,6 +18,7 @@ import java.time.ZonedDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import org.junit.jupiter.api.Test;
 
 class FindUsecaseTest {
@@ -203,7 +204,7 @@ class FindUsecaseTest {
 
   @Test
   void oversizedMarkdownReturnsMessageInsteadOfTruncatedUrl() {
-    var random = new java.util.Random(42);
+    var random = new Random(42);
     var title = new StringBuilder();
     for(int i = 0; i < 12000; i++)
       title.append((char) ('一' + random.nextInt(2000)));

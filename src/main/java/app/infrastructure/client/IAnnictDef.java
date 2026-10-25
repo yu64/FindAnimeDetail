@@ -12,6 +12,7 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -202,7 +203,7 @@ public interface IAnnictDef extends IAnnictClient {
         if(channelId > 0 && !priorities.contains(channelId)) continue;
 
         String name = channel.path("name").asText("");
-        java.time.ZonedDateTime startsAt = null;
+        ZonedDateTime startsAt = null;
         try {
           startsAt = OffsetDateTime.parse(program.path("startedAt").asText(""))
               .atZoneSameInstant(ZoneId.of("Asia/Tokyo"));

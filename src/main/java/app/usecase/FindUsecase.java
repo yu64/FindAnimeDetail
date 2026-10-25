@@ -15,8 +15,12 @@ import java.time.ZoneId;
 import java.time.OffsetDateTime;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.StringJoiner;
 import java.util.Base64;
 import java.util.Collection;
@@ -35,10 +39,10 @@ public class FindUsecase {
   private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("uuuu-MM-dd");
   private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
   // Native Imageに含まれるロケールデータに依存せず、日本語の曜日を表示する。
-  private static final DateTimeFormatter DAY = new java.time.format.DateTimeFormatterBuilder()
-      .appendText(java.time.temporal.ChronoField.DAY_OF_WEEK,
-          java.util.Map.of(1L, "月", 2L, "火", 3L, "水", 4L, "木", 5L, "金", 6L, "土", 7L, "日"))
-      .toFormatter(java.util.Locale.ROOT);
+  private static final DateTimeFormatter DAY = new DateTimeFormatterBuilder()
+      .appendText(ChronoField.DAY_OF_WEEK,
+          Map.of(1L, "月", 2L, "火", 3L, "水", 4L, "木", 5L, "金", 6L, "土", 7L, "日"))
+      .toFormatter(Locale.ROOT);
 
   // 日付は比較せず、日本時間の曜日（月→日）と時刻で並べる。日時不明は末尾。
   private static final Comparator<Anime> BROADCAST_ORDER = Comparator.comparing(

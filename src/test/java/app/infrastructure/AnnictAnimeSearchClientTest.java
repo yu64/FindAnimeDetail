@@ -9,6 +9,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -153,6 +154,6 @@ class AnnictAnimeSearchClientTest {
   void wrapsMalformedJson() {
     body = "not json";
     var error = assertThrows(AnimeSearchException.class, () -> client.searchByTitle("テスト", 1));
-    assertInstanceOf(java.io.IOException.class, error.getCause());
+    assertInstanceOf(IOException.class, error.getCause());
   }
 }
