@@ -45,6 +45,16 @@ param lineBotChannelSecret string
 @minLength(1)
 param lineBotChannelToken string
 
+// EDCB Material WebUI のベース URL。自宅サーバーの所在を示すため秘密値として扱う
+@secure()
+@minLength(1)
+param edcbApiUrl string
+
+// EDCB へのリクエストに付けるヘッダー（JSONオブジェクト）。認証が不要なら '{}'
+@secure()
+@minLength(1)
+param edcbApiHeaders string
+
 // Annict API のベース URL
 param annictApiUrl string = 'https://api.annict.com/graphql'
 
@@ -143,6 +153,14 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
           name: 'line-bot-channel-token'
           value: lineBotChannelToken
         }
+        {
+          name: 'edcb-api-url'
+          value: edcbApiUrl
+        }
+        {
+          name: 'edcb-api-headers'
+          value: edcbApiHeaders
+        }
       ]
     }
 
@@ -172,6 +190,14 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
             {
               name: 'LINE_BOT_CHANNEL_TOKEN'
               secretRef: 'line-bot-channel-token'
+            }
+            {
+              name: 'EDCB_API_URL'
+              secretRef: 'edcb-api-url'
+            }
+            {
+              name: 'EDCB_API_HEADERS'
+              secretRef: 'edcb-api-headers'
             }
             {
               name: 'ANNICT_API_URL'

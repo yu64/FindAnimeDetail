@@ -154,10 +154,24 @@ GitHub Actions を手動実行し、GHCR へのイメージ公開と Azure Conta
 | `ANNICT_API_TOKEN` | Annict のアクセストークン。 |
 | `LINE_BOT_CHANNEL_SECRET` | LINE Messaging API チャネルの Channel secret。 |
 | `LINE_BOT_CHANNEL_TOKEN` | LINE Messaging API のチャネルアクセストークン。 |
+| `EDCB_API_URL` | EDCB Material WebUI のベース URL（例: `https://edcb.example.com`）。`/api/...` は含めない。 |
+| `EDCB_API_HEADERS` | EDCB へのリクエストに付けるヘッダーを JSON オブジェクトで指定する。認証が不要なら `{}`。 |
 | `AZURE_CLIENT_ID` | OIDC 認証に使用する Microsoft Entra アプリまたはマネージド ID のクライアント ID。 |
 | `AZURE_TENANT_ID` | Azure のテナント ID。 |
 | `AZURE_SUBSCRIPTION_ID` | デプロイ先のサブスクリプション ID。 |
 | `AZURE_RESOURCE_GROUP` | デプロイ先の作成済みリソースグループ名。 |
+
+`EDCB_API_HEADERS` の例。値はログに出力しません。
+
+```json
+{"CF-Access-Client-Id":"xxxx.access","CF-Access-Client-Secret":"xxxx"}
+```
+
+| 構成 | 指定するヘッダー |
+| --- | --- |
+| Cloudflare Access（サービストークン） | `CF-Access-Client-Id`、`CF-Access-Client-Secret` |
+| Basic 認証のリバースプロキシ | `Authorization`（`Basic …`） |
+| 認証なし（LAN・VPN 経由など） | `{}` |
 
 
 

@@ -16,6 +16,8 @@ param deploymentId = readEnvironmentVariable('ACA_DEPLOYMENT_ID', '')
 param annictApiToken = readEnvironmentVariable('ANNICT_API_TOKEN')
 param lineBotChannelSecret = readEnvironmentVariable('LINE_BOT_CHANNEL_SECRET')
 param lineBotChannelToken = readEnvironmentVariable('LINE_BOT_CHANNEL_TOKEN')
+param edcbApiUrl = readEnvironmentVariable('EDCB_API_URL')
+param edcbApiHeaders = readEnvironmentVariable('EDCB_API_HEADERS')
 
 // パラメータ入力。設定値
 param annictApiUrl = readEnvironmentVariable('ANNICT_API_URL', 'https://api.annict.com/graphql')
