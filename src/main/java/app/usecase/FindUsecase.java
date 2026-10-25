@@ -62,7 +62,7 @@ public class FindUsecase {
     var condition = new SearchCondition(input.words(), List.of(), from, false);
     // 全タイトルをOR検索し、APIの返却順を保ちながら重複を除く。
     var works = new LinkedHashMap<Integer, Anime>();
-    for(Anime work : annict.search(condition, config.channelPriority())) {
+    for(Anime work : this.annict.search(condition, this.config.channelPriority())) {
       var first = work.firstBroadcast();
       if(!input.all() && (first == null || first.startsAt() == null
           || first.channelName() == null || first.channelName().isBlank())) {

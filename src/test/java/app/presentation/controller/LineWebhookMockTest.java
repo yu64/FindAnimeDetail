@@ -151,7 +151,8 @@ class LineWebhookMockTest {
   void unauthorizedUserIsRejectedWithoutCallingAnnict() throws Exception {
     annictReturnsWorks(SHIROBAKO);
 
-    sendWebhook(messageEvent(Map.of("type", "text", "id", "1", "text", "/find #word SHIROBAKO"), "other-user"))
+    sendWebhook(
+        messageEvent(Map.of("type", "text", "id", "1", "text", "/find #word SHIROBAKO"), "test-unauthorized-user"))
         .then().statusCode(200);
 
     assertEquals("このボットを利用する権限がありません。", onlyReply().text());

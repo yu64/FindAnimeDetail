@@ -1,25 +1,23 @@
 package app.presentation.controller;
 
-
-import com.linecorp.bot.model.event.CallbackRequest;
-import com.linecorp.bot.model.event.MessageEvent;
-import com.linecorp.bot.model.event.message.TextMessageContent;
-
-import app.util.IResult;
 import app.config.LineConfig;
 import app.infrastructure.AnimeSearchException;
-import io.quarkus.logging.Log;
+import app.presentation.ILineClient;
+import app.presentation.command.def.CommandDefRegistry;
+import app.presentation.command.parse.CommandExpression;
+import app.presentation.command.parse.ICommandSyntaxParser;
+import app.usecase.FindUsecase;
+import app.usecase.IInput;
 import app.usecase.IInput.FindInput;
 import app.usecase.IInput.HelpInput;
 import app.usecase.IInput.ReserveInput;
-import app.usecase.help.HelpUsecase;
-import app.usecase.IInput;
-import app.presentation.ILineClient;
-import app.presentation.command.def.CommandDefRegistry;
-import app.presentation.command.parse.ICommandSyntaxParser;
-import app.presentation.command.parse.CommandExpression;
-import app.usecase.FindUsecase;
 import app.usecase.ReserveUsecase;
+import app.usecase.help.HelpUsecase;
+import app.util.IResult;
+import com.linecorp.bot.model.event.CallbackRequest;
+import com.linecorp.bot.model.event.MessageEvent;
+import com.linecorp.bot.model.event.message.TextMessageContent;
+import io.quarkus.logging.Log;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -27,7 +25,6 @@ import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import java.util.List;
 
 @ApplicationScoped
 @Path("/line")
@@ -122,9 +119,9 @@ public class LineController {
     String msg;
     try {
       msg = switch(cmd) {
-        case HelpInput c -> helpUsecase.run(c);
-        case FindInput c -> findUsecase.run(c);
-        case ReserveInput c -> reserveUsecase.run(c);
+        case HelpInput c -> this.helpUsecase.run(c);
+        case FindInput c -> this.findUsecase.run(c);
+        case ReserveInput c -> this.reserveUsecase.run(c);
       };
     } catch(AnimeSearchException e) {
       Log.error("Anime search failed", e);
@@ -141,7 +138,7 @@ public class LineController {
 
   /** 許可リストが未設定の場合は、誰も利用できない。 */
   private boolean isAllowed(String userId) {
-    return userId != null && this.config.allowedUserIds().orElse(List.of()).stream()
+    return userId != null && this.config.allowedUserIds().stream()
         .map(String::strip)
         .anyMatch(userId::equals);
   }

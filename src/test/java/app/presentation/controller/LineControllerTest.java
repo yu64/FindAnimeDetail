@@ -22,7 +22,6 @@ import jakarta.ws.rs.core.Response;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class LineControllerTest {
@@ -45,8 +44,8 @@ class LineControllerTest {
     public String channelToken() {
       return "test-token";
     }
-    public Optional<List<String>> allowedUserIds() {
-      return Optional.of(List.of(" test-user "));
+    public List<String> allowedUserIds() {
+      return List.of(" test-user ");
     }
   };
 
@@ -77,7 +76,7 @@ class LineControllerTest {
     var replies = new ArrayList<String>();
     var controller = controller((condition, priorities) -> fail("Annict must not be called"),
         (token, text) -> replies.add(text));
-    assertEquals(200, controller.handle(request("tsv", "other-user")).getStatus());
+    assertEquals(200, controller.handle(request("tsv", "test-unauthorized-user")).getStatus());
     assertEquals(List.of("このボットを利用する権限がありません。"), replies);
   }
 
