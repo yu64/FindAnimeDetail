@@ -53,7 +53,6 @@ proto use
   - 接続先とテスト用の秘密値は `application.properties` の `%test.` 設定にある。
   - ケースを足すときは、Annict の応答を `annictReturnsWorks` などで用意し、`sendText` で送って、`onlyReply` で返信を検証する。
   - Native 実行ファイルに対しても同じケースを実行できる（`src/native-test` の `LineWebhookMockIT`）。リフレクション設定の漏れなど、Native だけで起きる不具合を検出する。実行ファイルも `test` プロファイルで起動する（`quarkus.test.integration-test-profile`）。
-- 実APIのテスト（`…LiveTest`）: 通常はスキップする。`ANNICT_LIVE_TEST=true` と `ANNICT_API_TOKEN` を設定すると実行する。
 
 Native のモックテストは Native ビルドが必要なため、Linux（コンテナ内など）で実行する。`testNative` は `build` / `check` には含まれないが、`container/aca-deploy/Dockerfile` の Native ビルドでは毎回実行する。
 
