@@ -26,4 +26,25 @@ public sealed interface IInput {
   };
 
 
+  /** entries は入力の行順。形式が不正な行は error を持ち、予約せずに失敗として返す。 */
+  public static record ReserveInput(List<Entry> entries) implements IInput {
+
+    public ReserveInput {
+      entries = List.copyOf(entries);
+    }
+
+    /** title は予約する作品名。error が null でなければ、title は結果に表示する入力行の内容。 */
+    public static record Entry(String title, String error) {
+
+      public static Entry ok(String title) {
+        return new Entry(title, null);
+      }
+
+      public static Entry err(String title, String error) {
+        return new Entry(title, error);
+      }
+    }
+  };
+
+
 }

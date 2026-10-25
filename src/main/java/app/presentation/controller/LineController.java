@@ -10,6 +10,7 @@ import app.infrastructure.AnimeSearchException;
 import io.quarkus.logging.Log;
 import app.usecase.IInput.FindInput;
 import app.usecase.IInput.HelpInput;
+import app.usecase.IInput.ReserveInput;
 import app.usecase.help.HelpUsecase;
 import app.usecase.IInput;
 import app.presentation.ILineClient;
@@ -17,6 +18,7 @@ import app.presentation.command.def.CommandDefRegistry;
 import app.presentation.command.parse.ICommandSyntaxParser;
 import app.presentation.command.parse.CommandExpression;
 import app.usecase.FindUsecase;
+import app.usecase.ReserveUsecase;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -34,6 +36,7 @@ public class LineController {
   private final CommandDefRegistry registry;
   private final HelpUsecase helpUsecase;
   private final FindUsecase findUsecase;
+  private final ReserveUsecase reserveUsecase;
 
   @Inject
   public LineController(
@@ -41,12 +44,14 @@ public class LineController {
       ICommandSyntaxParser parser,
       CommandDefRegistry registry,
       HelpUsecase helpUsecase,
-      FindUsecase findUsecase) {
+      FindUsecase findUsecase,
+      ReserveUsecase reserveUsecase) {
     this.line = line;
     this.parser = parser;
     this.registry = registry;
     this.helpUsecase = helpUsecase;
     this.findUsecase = findUsecase;
+    this.reserveUsecase = reserveUsecase;
   }
 
   @POST
@@ -105,6 +110,7 @@ public class LineController {
       msg = switch(cmd) {
         case HelpInput c -> helpUsecase.run(c);
         case FindInput c -> findUsecase.run(c);
+        case ReserveInput c -> reserveUsecase.run(c);
       };
     } catch(AnimeSearchException e) {
       Log.error("Anime search failed", e);

@@ -113,12 +113,26 @@ class LineWebhookMockTest {
   }
 
   @Test
+  void reserveAcceptsPastedFindTsvAndRepliesWithResultTsv() throws Exception {
+    sendText(String.join("\n", "/reserve",
+        "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
+        "2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\thttps://example.com/shirobako",
+        "2026-10-03\t01:30\t土"));
+
+    assertEquals(String.join("\n",
+        "結果\tタイトル\tキーワード\tEPGヒット\t備考",
+        "受付\tSHIROBAKO\tSHIROBAKO\t-\t予約処理は準備中です",
+        "失敗\t2026-10-03 01:30 土\t\t-\tタイトルがありません"), onlyReply().text());
+  }
+
+  @Test
   void helpRepliesWithUsageOfAllCommands() throws Exception {
     sendText("/help");
 
     var text = onlyReply().text();
     assertTrue(text.contains("[/find]"), text);
     assertTrue(text.contains("[/help]"), text);
+    assertTrue(text.contains("[/reserve]"), text);
   }
 
   // ###########################################################################

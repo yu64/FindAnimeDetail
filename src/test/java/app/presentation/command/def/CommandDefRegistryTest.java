@@ -11,13 +11,15 @@ import app.presentation.command.parse.CommandElementReader;
 import app.usecase.IInput;
 import app.usecase.IInput.FindInput;
 import app.usecase.IInput.HelpInput;
+import app.usecase.IInput.ReserveInput;
+import app.usecase.IInput.ReserveInput.Entry;
 import app.usecase.IInput.FindInput.Format;
 import app.util.IResult;
 
 class CommandDefRegistryTest {
 
   private final CommandDefRegistry registry = new CommandDefRegistry(
-      List.of(new HelpCommandDef(), new FindCommandDef()));
+      List.of(new HelpCommandDef(), new FindCommandDef(), new ReserveCommandDef()));
 
   @Test
   void mapsHelpAndFindWithDefaultOrExplicitFormat() {
@@ -111,6 +113,64 @@ class CommandDefRegistryTest {
           : reader.readEnum("format", Format.class);
       assertInstanceOf(IResult.Err.class, expected);
       assertEquals(expected, registry.map(parsed), input);
+    }
+  }
+
+  // ###########################################################################
+  // MARK: /reserve
+
+  private static final String FIND_HEADER = "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL";
+
+  @Test
+  void reserveTakesTitleColumnFromPastedFindTsv() {
+    // タイトルのカンマ・#、公式URLの空欄（末尾のタブ）も行の値として崩れずに届く。
+    assertEquals(IResult.ok(new ReserveInput(List.of(
+        Entry.ok("SHIROBAKO"), Entry.ok("ぼく, わたし #2"), Entry.ok("放送未定アニメ")))),
+        map(String.join("\n", "/reserve", FIND_HEADER,
+            "2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\thttps://example.com",
+            "2026-10-03\t01:30\t土\tBS11\tぼく, わたし #2\t",
+            "",
+            "N/A\tN/A\tN/A\tN/A\t放送未定アニメ\t")));
+  }
+
+  @Test
+  void reserveFindsTitleColumnByHeaderName() {
+    assertEquals(IResult.ok(new ReserveInput(List.of(Entry.ok("SHIROBAKO")))),
+        map("/reserve\nタイトル\t放送局\nSHIROBAKO\tTOKYO MX"));
+  }
+
+  @Test
+  void reserveTreatsEachLineAsTitleWithoutHeader() {
+    assertEquals(IResult.ok(new ReserveInput(List.of(
+        Entry.ok("SHIROBAKO"), Entry.ok("ぼく, わたし"), Entry.ok("#コンパス 戦闘摂理解析システム")))),
+        map("/reserve\nSHIROBAKO\nぼく, わたし\n\"#コンパス 戦闘摂理解析システム\""));
+  }
+
+  @Test
+  void reserveKeepsMalformedRowsAsErrors() {
+    assertEquals(IResult.ok(new ReserveInput(List.of(
+        Entry.ok("SHIROBAKO"), Entry.err("2026-10-03 01:30 土", "タイトルがありません")))),
+        map(String.join("\n", "/reserve", FIND_HEADER,
+            "2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\t",
+            "2026-10-03\t01:30\t土")));
+    assertEquals(IResult.ok(new ReserveInput(List.of(
+        Entry.err("SHIROBAKO TOKYO MX", "TSVの先頭行に「タイトル」列の見出しが必要です")))),
+        map("/reserve\nSHIROBAKO\tTOKYO MX"));
+  }
+
+  @Test
+  void reserveRejectsEmptyTooManyOrInlineArguments() {
+    assertEquals(IResult.err("予約する作品を2行目以降に入力してください"), map("/reserve"));
+    assertEquals(IResult.err("予約する作品を2行目以降に入力してください"), map("/reserve\n" + FIND_HEADER));
+
+    var rows = new StringBuilder("/reserve");
+    for(int i = 0; i <= ReserveCommandDef.MAX_ROWS; i++) {
+      rows.append("\nanime").append(i);
+    }
+    assertEquals(IResult.err("一度に予約できるのは 20 行までです（21 行）"), map(rows.toString()));
+
+    for(String input : List.of("/reserve SHIROBAKO", "/reserve #word SHIROBAKO", "/reserve\n#コンパス 戦闘")) {
+      assertEquals(IResult.err("予約する作品は2行目以降に1行ずつ入力してください"), map(input), input);
     }
   }
 

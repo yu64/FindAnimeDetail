@@ -11,6 +11,7 @@ import app.presentation.command.def.FindCommandDef;
 import app.presentation.command.def.HelpCommandDef;
 import app.usecase.FindUsecase;
 import app.usecase.IAnnictClient;
+import app.usecase.ReserveUsecase;
 import app.usecase.help.HelpUsecase;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -38,7 +39,7 @@ class LineControllerTest {
   private LineController controller(IAnnictClient annict, ILineClient line) {
     var registry = new CommandDefRegistry(List.of(new FindCommandDef(), new HelpCommandDef()));
     return new LineController(line, new MugCommandSyntaxParser(), registry,
-        new HelpUsecase(registry), new FindUsecase(annict, config));
+        new HelpUsecase(registry), new FindUsecase(annict, config), new ReserveUsecase());
   }
 
   private CallbackRequest request(String format) throws Exception {
