@@ -159,15 +159,9 @@ class CommandDefRegistryTest {
   }
 
   @Test
-  void reserveRejectsEmptyTooManyOrInlineArguments() {
+  void reserveRejectsEmptyOrInlineArguments() {
     assertEquals(IResult.err("予約する作品を2行目以降に入力してください"), map("/reserve"));
     assertEquals(IResult.err("予約する作品を2行目以降に入力してください"), map("/reserve\n" + FIND_HEADER));
-
-    var rows = new StringBuilder("/reserve");
-    for(int i = 0; i <= ReserveCommandDef.MAX_ROWS; i++) {
-      rows.append("\nanime").append(i);
-    }
-    assertEquals(IResult.err("一度に予約できるのは 20 行までです（21 行）"), map(rows.toString()));
 
     for(String input : List.of("/reserve SHIROBAKO", "/reserve #word SHIROBAKO", "/reserve\n#コンパス 戦闘")) {
       assertEquals(IResult.err("予約する作品は2行目以降に1行ずつ入力してください"), map(input), input);

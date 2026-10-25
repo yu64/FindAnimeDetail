@@ -15,9 +15,6 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class ReserveCommandDef implements ICommandDef {
 
-  /** 結果を LINE の1メッセージ（5000文字）に収めるための行数の上限。 */
-  public static final int MAX_ROWS = 20;
-
   /** /find の TSV でタイトルを持つ列の見出し。 */
   private static final String TITLE_COLUMN = "タイトル";
 
@@ -45,11 +42,10 @@ public class ReserveCommandDef implements ICommandDef {
       - 先頭行に「タイトル」列があれば、その列の作品名を使います。ほかの列は使いません。
       - 見出しがなければ、1行を1作品として扱います。
       - #で始まる作品名は "#作品名" のように " で囲んでください。
-      - 一度に %d 行まで入力できます。
 
       結果はTSVで返します。
       結果\tタイトル\tキーワード\tEPGヒット\t備考
-      """.formatted(MAX_ROWS);
+      """;
   }
 
   @Override
@@ -68,9 +64,6 @@ public class ReserveCommandDef implements ICommandDef {
     var rows = titleColumn < 0 ? lines : lines.subList(1, lines.size());
 
     if(rows.isEmpty()) return IResult.err("予約する作品を2行目以降に入力してください");
-    if(rows.size() > MAX_ROWS) {
-      return IResult.err("一度に予約できるのは %d 行までです（%d 行）".formatted(MAX_ROWS, rows.size()));
-    }
 
     // 形式が不正な行も結果に残すため、コマンド全体は失敗にせず行ごとにエラーを持たせる。
     List<Entry> entries = new ArrayList<>();
