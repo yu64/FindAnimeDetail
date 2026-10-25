@@ -69,6 +69,9 @@ param lineApiBaseUrl string = 'https://api.line.me'
 // 優先する放送局のID
 param annictApiChannelPriority string = '19,188,7,5,4,6,3,2,1'
 
+// EDCB の録画の保存先の親フォルダ。作品ごとにこの下へフォルダを分ける
+param edcbApiRecFolder string = '/record'
+
 
 // =============================================================================
 // MARK: コンテナリソースの定義変数
@@ -223,6 +226,10 @@ resource app 'Microsoft.App/containerApps@2025-07-01' = {
             {
               name: 'ANNICT_API_CHANNEL_PRIORITY'
               value: annictApiChannelPriority
+            }
+            {
+              name: 'EDCB_API_REC_FOLDER'
+              value: edcbApiRecFolder
             }
           ]
 

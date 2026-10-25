@@ -47,6 +47,7 @@ jobs:
       ANNICT_API_CHANNEL_PRIORITY: ${{ vars.ANNICT_API_CHANNEL_PRIORITY || '19,188,7,5,4,6,3,2,1' }}
       ANNICT_API_URL: ${{ vars.ANNICT_API_URL || 'https://api.annict.com/graphql' }}
       LINE_API_BASE_URL: ${{ vars.LINE_API_BASE_URL || 'https://api.line.me' }}
+      EDCB_API_REC_FOLDER: ${{ vars.EDCB_API_REC_FOLDER || '/record' }}
       DOCKER_BUILD_RECORD_UPLOAD: 'false'
 
     steps:

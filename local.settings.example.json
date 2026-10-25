@@ -12,6 +12,7 @@
     "LINE_API_BASE_URL": "https://api.line.me",
     "LINE_BOT_ALLOWED_USER_IDS": "",
     "EDCB_API_URL": "",
-    "EDCB_API_HEADERS": "{}"
+    "EDCB_API_HEADERS": "{}",
+    "EDCB_API_REC_FOLDER": "/record"
   }
 }
