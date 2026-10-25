@@ -24,7 +24,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** モックテスト: LINE の Webhook 受信から返信までを、LINE・Annict を WireMock に置き換えて確認する。 */
+/** モックテスト: LINE の Webhook 受信から返信までを、LINE・Annict・EDCB を WireMock に置き換えて確認する。 */
 @QuarkusTest
 @ConnectWireMock
 class LineWebhookMockTest {
@@ -34,6 +34,7 @@ class LineWebhookMockTest {
 
   private static final String REPLY_PATH = "/v2/bot/message/reply";
   private static final String ANNICT_PATH = "/graphql";
+  private static final String EDCB_PATH = "/edcb/api/";
   private static final String REPLY_TOKEN = "test-reply-token";
   private static final ObjectMapper JSON = new ObjectMapper();
 
@@ -113,16 +114,41 @@ class LineWebhookMockTest {
   }
 
   @Test
-  void reserveAcceptsPastedFindTsvAndRepliesWithResultTsv() throws Exception {
+  void reserveRegistersPastedFindTsvToEdcbAndRepliesWithResultTsv() throws Exception {
+    edcbAcceptsAutoAdd("[{\"dataID\":1,\"searchInfo\":{\"andKey\":\"ＳＨＩＲＯＢＡＫＯ\"}}]");
+
     sendText(String.join("\n", "/reserve",
         "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
         "2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\thttps://example.com/shirobako",
+        "2026-10-03\t01:30\t土\tBS11\t葬送のフリーレン 第2期\t",
         "2026-10-03\t01:30\t土"));
 
     assertEquals(String.join("\n",
         "結果\tタイトル\tキーワード\tEPGヒット\t備考",
-        "受付\tSHIROBAKO\tSHIROBAKO\t-\t予約処理は準備中です",
+        "重複\tSHIROBAKO\tSHIROBAKO\t-\t同じキーワードの自動予約があります",
+        "登録\t葬送のフリーレン 第2期\t葬送のフリーレン\t2\t",
         "失敗\t2026-10-03 01:30 土\t\t-\tタイトルがありません"), onlyReply().text());
+
+    // EDCB には認証ヘッダー付きで、キーワードとタイトルごとの保存先が送られる。
+    var added = this.wiremock.find(postRequestedFor(urlPathEqualTo(EDCB_PATH + "SetAutoAdd")));
+    assertEquals(1, added.size());
+    assertEquals("test-client-id", added.getFirst().getHeader("CF-Access-Client-Id"));
+    var form = List.of(added.getFirst().getBodyAsString().split("&")).stream()
+        .map(pair -> URLDecoder.decode(pair, StandardCharsets.UTF_8)).toList();
+    assertTrue(form.contains("andKey=葬送のフリーレン"), form.toString());
+    assertTrue(form.contains("recFolder=/record/葬送のフリーレン 第2期"), form.toString());
+  }
+
+  @Test
+  void reserveRepliesWithFailureRowsWhenEdcbIsUnreachable() throws Exception {
+    this.wiremock.register(get(urlPathEqualTo(EDCB_PATH + "EnumAutoAdd"))
+        .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+
+    sendText("/reserve\nSHIROBAKO");
+
+    assertEquals(String.join("\n",
+        "結果\tタイトル\tキーワード\tEPGヒット\t備考",
+        "失敗\tSHIROBAKO\tSHIROBAKO\t-\tEDCBに接続できません"), onlyReply().text());
   }
 
   @Test
@@ -284,7 +310,7 @@ class LineWebhookMockTest {
   }
 
   // ###########################################################################
-  // MARK: ヘルパー: Annict のスタブ・LINE への返信の取得
+  // MARK: ヘルパー: Annict のスタブ
 
   /** Annict の作品検索が、指定した作品を1ページで返すようにする。 */
   private void annictReturnsWorks(String... works) {
@@ -292,6 +318,34 @@ class LineWebhookMockTest {
         {"data":{"searchWorks":{"nodes":[%s],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}
         """.formatted(String.join(",", works)))));
   }
+
+  // ###########################################################################
+  // MARK: ヘルパー: EDCB のスタブ
+
+  /** 既存の自動予約を返し、登録・件数確認を受け付けるようにする。件数は常に2件。 */
+  private void edcbAcceptsAutoAdd(String autoAdds) {
+    this.wiremock.register(get(urlPathEqualTo(EDCB_PATH + "EnumAutoAdd")).willReturn(okJson(autoAdds)));
+    this.wiremock.register(get(urlPathEqualTo(EDCB_PATH + "EnumService")).willReturn(okJson("""
+        [{"service_name":"ＴＯＫＹＯ　ＭＸ１","onid":32391,"tsid":32391,"sid":23608}]
+        """)));
+    this.wiremock.register(get(urlPathEqualTo(EDCB_PATH + "EnumRecPreset")).willReturn(okJson("""
+        [{"id":0,"name":"Default","recSetting":{"recEnabled":true,"recMode":1,"noRecMode":1,"priority":2,
+          "suspendMode":4,"tunerID":0,"partialRecFlag":0,"batFilePath":"","batFileTag":"","serviceMode":0,
+          "recFolderList":[{"recFolder":"/record","writePlugIn":"Write_Default.so",
+            "recNamePlugIn":"RecName_Macro.so","recNameOp":"$Title$.ts"}]}}]
+        """)));
+    for(String script : List.of("setautoadd", "searchevent")) {
+      this.wiremock.register(get(urlPathEqualTo(EDCB_PATH + "Common")).withQueryParam("ctok", equalTo(script))
+          .willReturn(okJson("{\"" + script + "\":\"test-ctok\"}")));
+    }
+    this.wiremock.register(post(urlPathEqualTo(EDCB_PATH + "SearchEvent"))
+        .willReturn(okJson("{\"total\":2,\"index\":0,\"count\":1,\"items\":[]}")));
+    this.wiremock.register(post(urlPathEqualTo(EDCB_PATH + "SetAutoAdd"))
+        .willReturn(okJson("{\"success\":\"EPG自動予約を追加しました\"}")));
+  }
+
+  // ###########################################################################
+  // MARK: ヘルパー: LINE への返信の取得
 
   /** LINE の返信 API が受け取った返信の内容。 */
   private record Reply(String authorization, String token, String text) {}

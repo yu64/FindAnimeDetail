@@ -49,10 +49,11 @@ class LineControllerTest {
     }
   };
 
+  /** /reserve は登録しないため、ReserveUsecase の依存は使われない。 */
   private LineController controller(IAnnictClient annict, ILineClient line) {
     var registry = new CommandDefRegistry(List.of(new FindCommandDef(), new HelpCommandDef()));
     return new LineController(line, lineConfig, new MugCommandSyntaxParser(), registry,
-        new HelpUsecase(registry), new FindUsecase(annict, config), new ReserveUsecase());
+        new HelpUsecase(registry), new FindUsecase(annict, config), new ReserveUsecase(null, null));
   }
 
   private CallbackRequest request(String format) throws Exception {

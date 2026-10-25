@@ -23,13 +23,16 @@
 ```text
 結果	タイトル	キーワード	EPGヒット	備考
 登録	○○ 第2期	○○	3	
-重複	△△	△△	2	既存の自動予約あり
-登録	□□	□□	0	EPG未取得。放送が近づけば一致する見込み
+重複	△△	△△	-	同じキーワードの自動予約があります
+登録	□□	□□	0	EPGに一致する番組はまだありません
 失敗	××	××	-	EDCBに接続できません
 ```
 
 - `結果` は `登録`・`失敗`・`重複` の3種類。入力の行ごとに1行を返す。
 - `EPGヒット` は登録時点で一致した番組数。取得できなければ `-`。
+- `重複` は、既存の自動予約または同じ入力内に同じキーワードがある場合。全角英数・空白・大文字小文字の違いは無視する。
+- 既存の自動予約を取得できなければ、全行を `失敗` にする。登録中に失敗した場合は、タイムアウトを待ち続けないよう残りの行を中止する。
+- EDCB の応答の詳細は返信に含めない（ログにだけ残す）。
 
 ### 登録する自動予約
 
@@ -51,10 +54,11 @@ EDCB 本体には REST 風の API がないため、EDCB Material WebUI の `api
 
 | API | メソッド | 用途 |
 | --- | --- | --- |
-| `api/Common?ctok=setautoadd&json=1` | GET | 登録用の CSRF トークン（12〜24 時間有効）を取得する |
+| `api/Common?ctok=<スクリプト名>&json=1` | GET | `setautoadd`・`searchevent` 用の CSRF トークン（12〜24 時間有効）を取得する |
 | `api/EnumRecPreset?json=1` | GET | 録画プリセット |
+| `api/EnumService?json=1` | GET | 局の一覧。検索条件の全局に使う |
 | `api/EnumAutoAdd?json=1` | GET | 既存の自動予約。重複の判定に使う |
-| `api/SearchEvent?andKey=…&json=1&count=1` | GET | キーワードの EPG ヒット件数（`total`） |
+| `api/SearchEvent?json=1&count=1` | POST | 登録と同じ検索条件での EPG ヒット件数（`total`）。GET ではジャンルを指定できないため POST を使う |
 | `api/SetAutoAdd?json=1` | POST | 自動予約の登録（`addchg=1`）。フォーム形式 |
 
 - 登録の応答は `{"success":"…"}` または `{"err":"…"}`。
@@ -67,7 +71,7 @@ EDCB 本体には REST 風の API がないため、EDCB Material WebUI の `api
 | `EDCB_API_URL` | Material WebUI のベース URL |
 | `EDCB_API_HEADERS` | リクエストに付けるヘッダー（JSON オブジェクト）。Cloudflare Access などの認証に使う。不要なら `{}` |
 | `LINE_BOT_ALLOWED_USER_IDS` | ボットを利用できる LINE の userId（カンマ区切り）。`/reserve` に限らず全コマンドに適用する。未設定なら誰も利用できない |
-| 基準フォルダ（名称未定） | 保存先の親フォルダ。既定は `/record` |
+| `EDCB_API_REC_FOLDER` | 保存先の親フォルダ。既定は `/record` |
 
 ヘッダーの値はログに出さない。
 

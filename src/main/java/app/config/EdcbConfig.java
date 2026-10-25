@@ -14,4 +14,8 @@ public interface EdcbConfig {
   /** リクエストに付けるヘッダー（JSONオブジェクト）。環境変数: EDCB_API_HEADERS。値はログに出さない。 */
   @WithDefault("{}")
   String headers();
+
+  /** 録画の保存先の親フォルダ。作品ごとにこの下へフォルダを分ける。環境変数: EDCB_API_REC_FOLDER */
+  @WithDefault("/record")
+  String recFolder();
 }
