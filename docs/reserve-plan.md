@@ -38,7 +38,7 @@
 | キーワード (`andKey`) | Annict のタイトル。末尾の「第2期」「Season 2」などは除いて緩める |
 | 曖昧検索 (`aimaiFlag`) | 有効 |
 | ジャンル (`contentList`) | `2047`（アニメ/特撮の大分類） |
-| 局 (`serviceList`) | 指定しない（全局）。録画漏れを防ぐため局は絞らない |
+| 局 (`serviceList`) | `EnumService` の全局を明示する。録画漏れを防ぐため局は絞らない（指定しないとどの局にも一致しない） |
 | 録画済みチェック (`chkRecEnd` / `chkRecDay`) | 有効 / 6 日。同じ回を別の局で重複して録画しない |
 | 録画設定 | 既定プリセット（`EnumRecPreset` の id=0）の値をすべて送る |
 | 保存先 (`recFolder`) | `基準フォルダ/タイトル`。フォルダ名に使えない文字は置き換える。プラグインとファイル名書式はプリセットのもの |
@@ -80,8 +80,9 @@ EDCB 本体には REST 風の API がないため、EDCB Material WebUI の `api
 | usecase | `IInput.ReserveInput` | 予約するタイトルの一覧。形式が不正な行はエラーとして保持する |
 | usecase | `ReserveUsecase` | キーワード作成 → 重複判定 → ヒット件数 → 登録 → 結果 TSV |
 | usecase | `IEdcbClient` | EDCB 操作のインターフェイス |
-| infrastructure | `IEdcbDef` | Quarkus REST Client。ヘッダー付与、`ctok` の取得、フォーム POST。JSON は `JsonNode` で扱う |
-| infrastructure | `EdcbException` | 接続・認証・EDCB のエラー |
+| usecase | `EdcbException` | 接続・認証・EDCB のエラー。presentation 層から infrastructure 層を参照しないよう usecase 層に置く |
+| infrastructure | `IEdcbDef` | Quarkus REST Client。`ctok` の取得、フォーム POST。JSON は `JsonNode` で扱う |
+| infrastructure | `EdcbHeadersFactory` | `EDCB_API_HEADERS` の JSON を全リクエストのヘッダーにする |
 | config | `EdcbConfig` | URL・ヘッダー・基準フォルダ |
 
 ## 5. エラー処理
