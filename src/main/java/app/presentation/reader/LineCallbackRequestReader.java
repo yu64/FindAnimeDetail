@@ -1,5 +1,11 @@
 package app.presentation.reader;
 
+import app.config.LineConfig;
+import com.linecorp.bot.model.event.CallbackRequest;
+import com.linecorp.bot.parser.LineSignatureValidator;
+import com.linecorp.bot.parser.WebhookParseException;
+import com.linecorp.bot.parser.WebhookParser;
+import io.quarkus.logging.Log;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.WebApplicationException;
@@ -12,14 +18,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-
-import com.linecorp.bot.model.event.CallbackRequest;
-import com.linecorp.bot.parser.LineSignatureValidator;
-import com.linecorp.bot.parser.WebhookParseException;
-import com.linecorp.bot.parser.WebhookParser;
-
-import app.config.LineConfig;
-import io.quarkus.logging.Log;
 
 @Provider
 @Consumes(MediaType.APPLICATION_JSON)

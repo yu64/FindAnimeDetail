@@ -1,9 +1,9 @@
 package app.presentation.filter;
 
+import io.quarkus.logging.Log;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.container.ContainerRequestFilter;
 import jakarta.ws.rs.ext.Provider;
-import io.quarkus.logging.Log;
 import java.io.IOException;
 
 

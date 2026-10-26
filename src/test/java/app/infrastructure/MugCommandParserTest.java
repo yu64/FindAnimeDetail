@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import app.presentation.command.parse.CommandExpression;
+import app.presentation.command.parse.CommandExpression.IElement;
+import app.presentation.command.parse.CommandExpression.IElement.*;
+import app.util.IResult;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
@@ -11,11 +15,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-
-import app.presentation.command.parse.CommandExpression;
-import app.presentation.command.parse.CommandExpression.IElement;
-import app.presentation.command.parse.CommandExpression.IElement.*;
-import app.util.IResult;
 
 /** docs/parser.md の仕様例を期待値とする。実装の挙動に合わせて期待値を変更しない。 */
 class MugCommandParserTest {

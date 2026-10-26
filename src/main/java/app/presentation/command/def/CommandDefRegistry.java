@@ -1,10 +1,5 @@
 package app.presentation.command.def;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
 import app.presentation.command.parse.CommandExpression;
 import app.usecase.IInput;
 import app.usecase.help.IHelpProvider;
@@ -12,6 +7,10 @@ import app.util.IResult;
 import io.quarkus.arc.All;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 @ApplicationScoped
 public class CommandDefRegistry implements IHelpProvider {

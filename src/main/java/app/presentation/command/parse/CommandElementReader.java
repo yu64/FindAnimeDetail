@@ -1,15 +1,14 @@
 package app.presentation.command.parse;
 
+import app.presentation.command.parse.CommandExpression.IElement;
+import app.presentation.command.parse.CommandExpression.IElement.*;
+import app.util.IResult;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAccessor;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
-
-import app.presentation.command.parse.CommandExpression.IElement;
-import app.presentation.command.parse.CommandExpression.IElement.*;
-import app.util.IResult;
 
 
 /**

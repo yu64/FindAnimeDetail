@@ -2,12 +2,11 @@ package app.presentation.command.parse;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.List;
-import java.util.Optional;
-
 import app.presentation.command.parse.CommandExpression.IElement;
 import app.presentation.command.parse.CommandExpression.IElement.*;
 import app.util.IResult;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class CommandElementReaderTest {

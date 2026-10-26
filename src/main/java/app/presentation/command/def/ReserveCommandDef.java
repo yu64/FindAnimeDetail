@@ -1,9 +1,5 @@
 package app.presentation.command.def;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 import app.presentation.command.parse.CommandExpression;
 import app.presentation.command.parse.CommandExpression.IElement.UnnamedListElement;
 import app.usecase.IInput;
@@ -11,6 +7,9 @@ import app.usecase.IInput.ReserveInput;
 import app.usecase.IInput.ReserveInput.Entry;
 import app.util.IResult;
 import jakarta.enterprise.context.ApplicationScoped;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 @ApplicationScoped
 public class ReserveCommandDef implements ICommandDef {

@@ -1,9 +1,9 @@
 package app.infrastructure;
 
-import app.presentation.command.parse.ICommandSyntaxParser;
 import app.presentation.command.parse.CommandExpression;
 import app.presentation.command.parse.CommandExpression.IElement;
 import app.presentation.command.parse.CommandExpression.IElement.*;
+import app.presentation.command.parse.ICommandSyntaxParser;
 import app.util.IResult;
 import com.google.common.labs.parse.Parser;
 import jakarta.enterprise.context.ApplicationScoped;

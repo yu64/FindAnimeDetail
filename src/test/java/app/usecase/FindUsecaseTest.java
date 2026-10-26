@@ -8,17 +8,17 @@ import app.usecase.IAnnictClient.FirstBroadcast;
 import app.usecase.IAnnictClient.SearchCondition;
 import app.usecase.IInput.FindInput;
 import app.usecase.IInput.FindInput.Format;
+import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.io.ByteArrayInputStream;
-import java.util.Base64;
-import java.util.zip.GZIPInputStream;
-import java.time.ZonedDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.Random;
+import java.util.zip.GZIPInputStream;
 import org.junit.jupiter.api.Test;
 
 class FindUsecaseTest {
