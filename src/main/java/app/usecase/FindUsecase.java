@@ -102,7 +102,10 @@ public class FindUsecase {
   public String run(FindInput input) {
     // 判定中に時刻が進んでも、すべての作品を同じ「現在」で判定する。
     var now = this.clock.instant();
-    var period = input.period();
+
+    // 期間の指定がなければ、今季と来季とする。
+    var today = Season.of(now.atZone(JST).toLocalDate());
+    var period = input.period() != null ? input.period() : new Period.Seasons(List.of(today, today.next()));
 
     // シーズン指定は Annict に絞り込ませる。日時だけの指定は前後のシーズンを含めて問い合わせ、日時で絞り込む。
     List<String> seasons = switch(period) {
@@ -153,23 +156,28 @@ public class FindUsecase {
     // 日時指定は初回放送の日時で期間を判定する。日時が分からない作品は期間内か判定できないため出力しない。
     var range = (Period.Range) period;
     if(first != null) {
-      if(first.startsAt() == null || !within(first.startsAt(), range, now)) return null;
+      if(first.startsAt() == null || !within(first.startsAt(), range)) return null;
       return first.startsAt().toInstant().isAfter(now) ? Status.HIT : Status.DONE;
     }
-    return work.firstAiredAt() != null && within(work.firstAiredAt(), range, now) ? Status.SKIP : null;
+    return work.firstAiredAt() != null && within(work.firstAiredAt(), range) ? Status.SKIP : null;
   }
 
-  /** from は境界を含み、to は含まない。from がなければ現在日時、to がなければ上限なし。 */
-  private static boolean within(ZonedDateTime time, Period.Range range, Instant now) {
+  /** from は境界を含み、to は含まない。指定のない側は制限しない。 */
+  private static boolean within(ZonedDateTime time, Period.Range range) {
     var instant = time.toInstant();
-    var from = range.from() == null ? now : range.from().toInstant();
-    return !instant.isBefore(from) && (range.to() == null || instant.isBefore(range.to().toInstant()));
+    return (range.from() == null || !instant.isBefore(range.from().toInstant()))
+        && (range.to() == null || instant.isBefore(range.to().toInstant()));
   }
 
-  /** 日時の期間にかかるシーズンと前後1シーズンずつ。to がなければ来季までとする。 */
+  /**
+   * 日時の期間にかかるシーズンと前後1シーズンずつ。to がなければ来季までとする。
+   * from がないと問い合わせるシーズンを決められないため、検索語のない日時の期間では from を必須とする。
+   */
   private static List<String> coveringSeasons(Period.Range range, Instant now) {
-    var from = range.from() == null ? now : range.from().toInstant();
-    var first = Season.of(from.atZone(JST).toLocalDate()).previous();
+    if(range.from() == null) {
+      throw new IllegalArgumentException("Specify from when searching by date range without titles");
+    }
+    var first = Season.of(range.from().atZoneSameInstant(JST).toLocalDate()).previous();
     var last = range.to() == null
         ? Season.of(now.atZone(JST).toLocalDate()).next()
         : Season.of(range.to().toInstant().minusNanos(1).atZone(JST).toLocalDate()).next();

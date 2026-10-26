@@ -6,12 +6,12 @@
 /find #word 作品名
 /find #word 作品名1, 作品名2 #season next
 /find #word 作品名 #from 2027-01 #to 2027-04
-/find #season 2027-winter #hit #plain
+/find #season 2027-winter #plain
 /find #format md #word 作品名
-/find #word 作品名1, 作品名2 #miss
+/find #word 作品名1, 作品名2 #out #miss
 ```
 
-作品名や期間からアニメの初回放送を Annict で探し、「放送予定」「放送済み」「対象外」「期間外」「未登録」を区別して返します。期間は `#season`（`2027-winter`・`now`・`next`）か `#from`・`#to` で指定し、省略時は現在以降です。`#hit`・`#done`・`#skip`・`#out`・`#miss` で出力する状態を選び、`#plain` で状態・検索語の列を省けます。仕様は [docs/find-plan.md](docs/find-plan.md) を参照してください。
+作品名や期間からアニメの初回放送を Annict で探し、「放送予定」「放送済み」「対象外」「期間外」「未登録」を区別して返します。期間は `#season`（`2027-winter`・`now`・`next`）か `#from`・`#to` で指定し、省略時は今季と来季です。`#hit`・`#done`・`#skip`・`#out`・`#miss` で出力する状態を選び（省略時は放送予定だけ）、`#plain` で状態・検索語の列を省けます。仕様は [docs/find-plan.md](docs/find-plan.md) を参照してください。
 
 ## EPG自動予約
 

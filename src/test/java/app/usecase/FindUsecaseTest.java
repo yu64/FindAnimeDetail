@@ -21,6 +21,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
@@ -34,6 +35,7 @@ class FindUsecaseTest {
   private static final Clock CLOCK = Clock.fixed(OffsetDateTime.parse("2026-10-26T12:00:00+09:00").toInstant(),
       ZoneOffset.UTC);
   private static final Period WINTER_2027 = new Period.Seasons(List.of(new Season(2027, Name.WINTER)));
+  private static final Set<Status> ALL = EnumSet.allOf(Status.class);
 
   private final AnnictConfig config = new AnnictConfig() {
     public URI url() {
@@ -71,12 +73,30 @@ class FindUsecaseTest {
   // MARK: 期間を省略・日時で指定
 
   @Test
-  void defaultPeriodStartsNowAndSeparatesOtherChannelsOutOfPeriodAndMissingWords() {
-    var result = run(new FindInput(Format.TSV, List.of("ぼく", "ワンパンマン", "わたし")),
+  void defaultsToScheduledWorksOfCurrentAndNextSeasons() {
+    var result = run(new FindInput(Format.TSV, List.of("ぼく", "わたし")),
         new WordResult("ぼく", List.of(
             new Anime(1, "予定", URI.create("https://example.com/a"), "2026-autumn",
                 new FirstBroadcast(19, "TOKYO MX", jst("2026-10-31T01:00:00")), jst("2026-10-31T01:00:00"), true),
             anime(2, "開始済み", "2026-autumn", jst("2026-10-05T23:00:00")),
+            new Anime(3, "他局", null, "2027-winter", null, jst("2027-01-05T00:00:00"), true),
+            anime(4, "来季", "2027-winter", null)), true),
+        new WordResult("わたし", List.of(), false));
+
+    // 期間は今季と来季。出力は放送予定だけで、放送済み・対象外・未登録は出さない。
+    assertEquals(List.of(List.of("2026-autumn", "2027-winter")), seasonCalls);
+    assertEquals(String.join("\n", HEADER,
+        "放送予定\tぼく\t2026-10-31\t01:00\t土\tTOKYO MX\t予定\thttps://example.com/a",
+        "放送予定\tぼく\t\t\t\tTOKYO MX\t来季\t"), result);
+  }
+
+  @Test
+  void rangeSeparatesOtherChannelsOutOfPeriodAndMissingWords() {
+    var range = new Period.Range(OffsetDateTime.parse("2026-10-26T00:00:00+09:00"), null);
+
+    var result = run(new FindInput(Format.TSV, List.of("ぼく", "ワンパンマン", "わたし"), range, ALL, false),
+        new WordResult("ぼく", List.of(
+            anime(1, "予定", "2026-autumn", jst("2026-10-31T01:00:00")),
             new Anime(3, "他局", null, "2026-autumn", null, jst("2026-11-01T00:00:00"), true),
             anime(4, "日時なし", "2027-winter", null)), true),
         new WordResult("ワンパンマン", List.of(anime(5, "ワンパンマン", "2015-autumn", jst("2015-10-05T01:05:00"))), true),
@@ -84,18 +104,17 @@ class FindUsecaseTest {
 
     assertEquals(List.of(List.of()), seasonCalls);
     assertEquals(String.join("\n", HEADER,
-        "放送予定\tぼく\t2026-10-31\t01:00\t土\tTOKYO MX\t予定\thttps://example.com/a",
+        "放送予定\tぼく\t2026-10-31\t01:00\t土\tTOKYO MX\t予定\t",
         "対象外\tぼく\t\t\t\t\t他局\t",
         "期間外\tワンパンマン\t\t\t\t\tワンパンマン\t",
         "未登録\tわたし\t\t\t\t\tわたし\t"), result);
   }
-
   @Test
   void rangeIncludesFromExcludesToAndSplitsScheduledAndAiredByNow() {
     var range = new Period.Range(OffsetDateTime.parse("2026-10-01T00:00:00+09:00"),
         OffsetDateTime.parse("2027-01-01T00:00:00+09:00"));
 
-    var result = run(new FindInput(Format.TSV, List.of("A"), range), new WordResult("A", List.of(
+    var result = run(new FindInput(Format.TSV, List.of("A"), range, ALL, false), new WordResult("A", List.of(
         anime(1, "境界", "2026-autumn", jst("2026-10-01T00:00:00")),
         anime(2, "未来", "2026-autumn", jst("2026-12-31T23:59:00")),
         anime(3, "終端", "2027-winter", jst("2027-01-01T00:00:00")),
@@ -118,10 +137,13 @@ class FindUsecaseTest {
     assertEquals(List.of(List.of("2026-autumn", "2027-winter", "2027-spring")), seasonCalls);
     assertEquals(String.join("\n", HEADER, "放送予定\t\t2027-01-10\t23:00\t日\tTOKYO MX\t冬\t"), result);
 
-    // to がなければ、現在の来季まで問い合わせる。
+    // to がなければ、現在の来季まで問い合わせる。from がなければ問い合わせるシーズンを決められない。
     seasonCalls.clear();
-    run(new FindInput(Format.TSV, List.of(), new Period.Range(null, null)), new WordResult(null, List.of(), false));
+    run(new FindInput(Format.TSV, List.of(), new Period.Range(OffsetDateTime.parse("2026-10-26T00:00:00+09:00"),
+        null)), new WordResult(null, List.of(), false));
     assertEquals(List.of(List.of("2026-summer", "2026-autumn", "2027-winter")), seasonCalls);
+    assertThrows(IllegalArgumentException.class, () -> run(new FindInput(Format.TSV, List.of(),
+        new Period.Range(null, OffsetDateTime.parse("2027-04-01T00:00:00+09:00")))));
   }
 
   // ###########################################################################
@@ -129,7 +151,7 @@ class FindUsecaseTest {
 
   @Test
   void seasonPeriodUsesWorkSeasonAndTreatsUnknownDatesAsScheduled() {
-    var result = run(new FindInput(Format.TSV, List.of("SAKAMOTO", "ワンパンマン"), WINTER_2027),
+    var result = run(new FindInput(Format.TSV, List.of("SAKAMOTO", "ワンパンマン"), WINTER_2027, ALL, false),
         new WordResult("SAKAMOTO", List.of(
             new Anime(1, "放送データなし", null, "2027-winter", null, null, false),
             anime(2, "年末開始", "2027-winter", jst("2026-12-28T00:00:00")),
@@ -150,7 +172,7 @@ class FindUsecaseTest {
   @Test
   void seasonPeriodMarksAiredWorksOfCurrentSeason() {
     var autumn = new Period.Seasons(List.of(new Season(2026, Name.AUTUMN)));
-    var result = run(new FindInput(Format.TSV, List.of("A"), autumn), new WordResult("A", List.of(
+    var result = run(new FindInput(Format.TSV, List.of("A"), autumn, ALL, false), new WordResult("A", List.of(
         anime(1, "開始済み", "2026-autumn", jst("2026-10-05T23:00:00"))), true));
     assertEquals(String.join("\n", HEADER, "放送済み\tA\t2026-10-05\t23:00\t月\tTOKYO MX\t開始済み\t"), result);
   }
@@ -165,13 +187,11 @@ class FindUsecaseTest {
         new WordResult("わたし", List.of(), false)};
 
     assertEquals(String.join("\n", HEADER, "未登録\tわたし\t\t\t\t\tわたし\t"),
-        run(new FindInput(Format.TSV, List.of("ぼく", "わたし"), new Period.Range(null, null), Set.of(Status.MISS),
-            false), results));
+        run(new FindInput(Format.TSV, List.of("ぼく", "わたし"), null, Set.of(Status.MISS), false), results));
     assertEquals(String.join("\n", PLAIN_HEADER, "2026-11-02\t23:00\t月\tTOKYO MX\t予定\t", "\t\t\t\tわたし\t"),
-        run(new FindInput(Format.TSV, List.of("ぼく", "わたし"), new Period.Range(null, null),
-            Set.of(Status.HIT, Status.MISS), true), results));
-    assertEquals(PLAIN_HEADER, run(new FindInput(Format.TSV, List.of("わたし"), new Period.Range(null, null),
-        Set.of(Status.HIT), true), results[1]));
+        run(new FindInput(Format.TSV, List.of("ぼく", "わたし"), null, Set.of(Status.HIT, Status.MISS), true),
+            results));
+    assertEquals(PLAIN_HEADER, run(new FindInput(Format.TSV, List.of("わたし"), null, Set.of(), true), results[1]));
   }
 
   @Test
@@ -231,7 +251,7 @@ class FindUsecaseTest {
         new WordResult("わたし", List.of(), false)};
 
     String markdown = decodeViewerUrl(run(new FindInput(Format.MD, List.of("A|B", "ワンパンマン", "わたし"),
-        WINTER_2027), results));
+        WINTER_2027, ALL, false), results));
 
     assertEquals(String.join("\n",
         "# アニメ検索結果", "",

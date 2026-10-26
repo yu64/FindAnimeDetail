@@ -40,15 +40,15 @@ class CommandDefRegistryTest {
 
   @Test
   void mapsStatusAndPlainSwitchesWithOtherOptionsAndRejectsValuesOrDuplicates() {
-    assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("anime"), range(null), Set.of(Status.MISS), false)),
+    // 期間を指定しなければ null（今季と来季）になる。
+    assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("anime"), null, Set.of(Status.MISS), false)),
         map("/find #word anime #miss"));
     var from = OffsetDateTime.parse("2026-10-01T00:00:00+09:00");
     assertEquals(IResult.ok(new FindInput(Format.MD, List.of("a", "b"), range(from),
         Set.of(Status.HIT, Status.DONE, Status.SKIP, Status.OUT), true)),
         map("/find #skip #format md #word a, b #hit #done #out #plain #from 2026-10-01T00:00"));
-    // 状態の指定がなければすべての状態になる。
-    assertEquals(EnumSet.allOf(Status.class),
-        ((FindInput) map("/find #word anime #plain").ok().val()).statuses());
+    // 状態の指定がなければ放送予定だけになる。
+    assertEquals(EnumSet.of(Status.HIT), ((FindInput) map("/find #word anime #plain").ok().val()).statuses());
     for(String suffix : List.of("#hit true", "#plain false", "#miss #miss", "#done #done")) {
       assertInstanceOf(IResult.Err.class, map("/find #word anime " + suffix), suffix);
     }
@@ -86,9 +86,12 @@ class CommandDefRegistryTest {
     var to = OffsetDateTime.parse("2027-04-01T00:00:00+09:00");
     assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("a"), new Period.Range(from, to))),
         map("/find #word a #from 2027-01 #to 2027-04"));
-    // 期間を指定すれば検索語は省略できる。
-    assertEquals(IResult.ok(new FindInput(Format.TSV, List.of(), new Period.Range(null, to))),
-        map("/find #to 2027-04"));
+    // from・to は省略した側を制限しない。検索語を省略する場合は from が必要。
+    assertEquals(IResult.ok(new FindInput(Format.TSV, List.of("a"), new Period.Range(null, to))),
+        map("/find #word a #to 2027-04"));
+    assertEquals(IResult.ok(new FindInput(Format.TSV, List.of(), new Period.Range(from, null))),
+        map("/find #from 2027-01"));
+    assertEquals(IResult.err("word を指定しない場合は from を指定してください"), map("/find #to 2027-04"));
     assertEquals(IResult.err("from は to より前を指定してください"), map("/find #from 2027-04 #to 2027-04"));
     assertInstanceOf(IResult.Err.class, map("/find #word a #to 2027-13"));
   }

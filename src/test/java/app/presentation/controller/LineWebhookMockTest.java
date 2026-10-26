@@ -73,7 +73,7 @@ class LineWebhookMockTest {
   void findRepliesWithTsvPerWordThroughOneAnnictRequest() throws Exception {
     annictReturnsWorks(SHIROBAKO + "," + NO_BROADCAST, "");
 
-    sendText("/find #word SHIROBAKO, 存在しない作品 #from 2026-10");
+    sendText("/find #word SHIROBAKO, 存在しない作品 #from 2026-10 #hit #done #miss");
 
     // 返信は LINE の返信 API に、正しい認証・返信トークンで届く。
     var reply = onlyReply();
@@ -97,7 +97,7 @@ class LineWebhookMockTest {
   void findWithMarkdownFormatRepliesWithViewerUrl() throws Exception {
     annictReturnsWorks(SHIROBAKO);
 
-    sendText("/find #format md #word SHIROBAKO #from 2026-10");
+    sendText("/find #format md #word SHIROBAKO #from 2026-10 #done");
 
     var text = onlyReply().text();
     var prefix = "https://kitware.github.io/markdown-viewer/?mdz=";
@@ -124,7 +124,7 @@ class LineWebhookMockTest {
   void findSeasonWithoutWordsListsSeasonWorksWithUnknownDatesAsScheduled() throws Exception {
     annictReturnsWorks(NEXT_SEASON);
 
-    sendText("/find #season 2027-winter #hit");
+    sendText("/find #season 2027-winter");
 
     assertEquals(String.join("\n",
         "状態\t検索語\t放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
@@ -134,6 +134,7 @@ class LineWebhookMockTest {
     assertEquals(List.of("2027-winter"), JSON.convertValue(variables.path("s"), List.class));
     assertTrue(variables.path("t0").isMissingNode());
   }
+
   @Test
   void reserveRegistersPastedFindTsvToEdcbAndRepliesWithResultTsv() throws Exception {
     edcbAcceptsAutoAdd("[{\"dataID\":1,\"searchInfo\":{\"andKey\":\"ＳＨＩＲＯＢＡＫＯ\"}}]");

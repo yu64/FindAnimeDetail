@@ -65,9 +65,9 @@ public class FindCommandDef implements ICommandDef {
       /find #word ぼく
       /find #word ぼく, わたし #season next
       /find #word ぼく #from 2027-01 #to 2027-04
-      /find #season 2027-winter #hit #plain
+      /find #season 2027-winter #plain
       /find #format md #word ぼく
-      /find #word ぼく, わたし #miss
+      /find #word ぼく, わたし #out #miss
 
       /find
       ぼく
@@ -83,14 +83,15 @@ public class FindCommandDef implements ICommandDef {
       作品のシーズンは Annict の分類で判定します。
 
       - from / to (任意)
-      期間を日時で指定します。from は含み、to は含みません。
+      期間を日時で指定します。from は含み、to は含みません。省略した側は制限しません。
+      word を指定しない場合は from が必要です。
       形式: 2026-10-01T00:00 または 2026-10-01T00:00:00+09:00
       2026-10-01（時刻省略）や2026-10（日・時刻省略）も指定できます。
       省略した日は1日、時刻は00:00、時差は日本時間として扱います。
       初回放送の日時が分からない作品は、期間内か判定できないため出力しません。
 
       期間は season と from / to のどちらか一方で指定します。
-      省略時は、検索実行時以降（from が現在日時）です。
+      省略時は今季と来季（#season now, next）です。
       結果の作品はすべて期間内に収まります。
 
       - format (任意)
@@ -100,7 +101,9 @@ public class FindCommandDef implements ICommandDef {
       MD は検索結果の表を Kitware Markdown Viewer で開くURLを返します。
 
       - hit / done / skip / out / miss (任意・値なしのスイッチ)
-      出力する状態。指定した状態だけを出力します。省略時はすべて出力します。
+      出力する状態。指定した状態だけを出力します。省略時は放送予定だけを出力します。
+      見つからなかった検索語を確認する場合は #out #miss を指定してください。
+      今季に始まって放送中の作品は放送済みになるため、予約する場合は #hit #done を指定してください。
       #hit: 放送予定（優先局で、初回放送が現在より後。season 指定では放送日時が未登録の作品も含む）
       #done: 放送済み（優先局で、初回放送が現在以前）
       #skip: 対象外（期間内だが優先局の放送がない）
@@ -115,7 +118,7 @@ public class FindCommandDef implements ICommandDef {
       件数の多い検索語・シーズンでは、一部の作品が結果に含まれません。
       再放送は初回放送の判定に使いません。
       /reserve に貼り付けると、すべての行が予約の対象になります。
-      放送予定だけを予約する場合は #hit で絞ってください。
+      既定の出力は放送予定だけなので、そのまま貼り付けられます。
       """.formatted(List.of(Format.values()).toString(), IAnnictClient.PAGE_SIZE, IAnnictClient.PAGE_SIZE);
   }
 
@@ -149,8 +152,8 @@ public class FindCommandDef implements ICommandDef {
     var seasonResult = reader.readStrList("season");
     if(seasonResult instanceof IResult.Err) return seasonResult.err();
 
-    // 期間はシーズンか日時のどちらか一方。どちらもなければ現在以降とし、その場合は検索語を必須にする。
-    Period period;
+    // 期間はシーズンか日時のどちらか一方。どちらもなければ今季と来季（null）とし、その場合は検索語を必須にする。
+    Period period = null;
     if(seasonResult.ok().val().isPresent()) {
       if(from != null || to != null) return IResult.err("season と from・to は同時に指定できません");
 
@@ -164,15 +167,16 @@ public class FindCommandDef implements ICommandDef {
         seasons.add(season.get());
       }
       period = new Period.Seasons(seasons);
-    } else {
+    } else if(from != null || to != null) {
       if(from != null && to != null && !from.isBefore(to)) return IResult.err("from は to より前を指定してください");
-      if(words.isEmpty() && from == null && to == null) {
-        return IResult.err("word か期間（season・from・to）を指定してください");
-      }
+      // 検索語がない場合は、from から問い合わせるシーズンを決めるため from を必須にする。
+      if(words.isEmpty() && from == null) return IResult.err("word を指定しない場合は from を指定してください");
       period = new Period.Range(from, to);
+    } else if(words.isEmpty()) {
+      return IResult.err("word か期間（season・from・to）を指定してください");
     }
 
-    // 指定された状態だけを出力する。1つも指定がなければ FindInput がすべての状態にする。
+    // 指定された状態だけを出力する。1つも指定がなければ FindInput が放送予定だけにする。
     Set<Status> statuses = EnumSet.noneOf(Status.class);
     for(var status : Status.values()) {
       var switchResult = reader.readSwitch(status.name().toLowerCase(Locale.ROOT));

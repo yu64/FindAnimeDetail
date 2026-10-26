@@ -11,23 +11,26 @@ public sealed interface IInput {
   public static record HelpInput(String cmd) implements IInput {};
 
 
-  /** words は空なら期間だけで探す。statuses は出力する状態（空ならすべて）、plain は状態・検索語の列を省く。 */
+  /**
+   * words は空なら期間だけで探す。period は null なら今季と来季（実行時に求める）。
+   * statuses は出力する状態（空なら放送予定だけ）、plain は状態・検索語の列を省く。
+   */
   public static record FindInput(Format fmt, List<String> words, Period period, Set<Status> statuses,
       boolean plain) implements IInput {
 
     public FindInput {
       words = List.copyOf(words);
-      statuses = statuses.isEmpty() ? EnumSet.allOf(Status.class) : EnumSet.copyOf(statuses);
+      statuses = statuses.isEmpty() ? EnumSet.of(Status.HIT) : EnumSet.copyOf(statuses);
     }
 
-    /** すべての状態を、すべての列で出力する。 */
+    /** 放送予定だけを、すべての列で出力する。 */
     public FindInput(Format fmt, List<String> words, Period period) {
       this(fmt, words, period, Set.of(), false);
     }
 
-    /** 期間を指定しない場合は、現在以降を期間とする。 */
+    /** 期間を指定しない場合は、今季と来季を期間とする。 */
     public FindInput(Format fmt, List<String> words) {
-      this(fmt, words, new Period.Range(null, null));
+      this(fmt, words, null);
     }
 
     public static enum Format {
@@ -44,7 +47,7 @@ public sealed interface IInput {
         }
       }
 
-      /** 初回放送が from 以上・to 未満なら期間内。from が null なら現在日時、to が null なら上限なし。 */
+      /** 初回放送が from 以上・to 未満なら期間内。null の側は制限なし。 */
       public record Range(OffsetDateTime from, OffsetDateTime to) implements Period {}
     }
 
