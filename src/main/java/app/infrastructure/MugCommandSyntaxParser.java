@@ -134,10 +134,22 @@ public class MugCommandSyntaxParser implements ICommandSyntaxParser {
       Parser.one("[^#\" \t\u3000\r\n]"), LINE_TEXT.orElse(""),
       (first, rest) -> new ValueLine(first + rest));
 
-  // インデントを除き、引用・見出し・引数行を優先して判定する。
+  /**
+   * 行頭がタブの行は、タブを含めてリストの値とする。先頭列が空のTSVを貼り付けても列がずれない。
+   * 空白だけの行は空行として扱う。
+   */
+  private static final Parser<BodyLine> TAB_VALUE_LINE = Parser.sequence(
+      Parser.consecutive("[\t]"), LINE_TEXT,
+      (tabs, rest) -> rest.isBlank() ? new BlankLine() : new ValueLine(tabs + rest));
+
+  private static final Parser<BodyLine> WHITESPACE_LINE = SPACE.map(spaces -> new BlankLine());
+
+  // 行頭のタブを先に判定し、それ以外はインデントを除いて引用・見出し・引数行を優先して判定する。
   // 空行はリストの境界になるため、読み飛ばさず後段に渡す。
-  private static final Parser<BodyLine>.OrEmpty BODY_LINE = SPACES.then(
-      Parser.anyOf(QUOTED_LINE, HEADER_LINE, ARGUMENT_LINE, VALUE_LINE).orElse(new BlankLine()));
+  private static final Parser<BodyLine>.OrEmpty BODY_LINE = Parser.anyOf(
+      TAB_VALUE_LINE,
+      SPACES.then(Parser.anyOf(QUOTED_LINE, HEADER_LINE, ARGUMENT_LINE, VALUE_LINE)),
+      WHITESPACE_LINE).orElse(new BlankLine());
 
   // ###########################################################################
   // MARK: コマンド全体

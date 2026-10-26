@@ -73,12 +73,13 @@ public class ReserveCommandDef implements ICommandDef {
     return IResult.ok(new ReserveInput(entries));
   }
 
-  /** 見出しのない行は、行全体を作品名とする。 */
+  /** 見出しのない行は、行全体を作品名とする。行頭のタブはパーサーが残すため、前後の空白を除いてから判定する。 */
   private static Entry titleOnly(String row) {
-    if(row.indexOf('\t') >= 0) {
+    var title = row.strip();
+    if(title.indexOf('\t') >= 0) {
       return Entry.err(display(row), "TSVの先頭行に「" + TITLE_COLUMN + "」列の見出しが必要です");
     }
-    return Entry.ok(row.strip());
+    return Entry.ok(title);
   }
 
   /** TSV の行から、見出しで指定された列の作品名を取り出す。 */

@@ -138,6 +138,8 @@ class MugCommandParserTest {
                     hoge
                 fuga
                 """, new UnnamedListElement(List.of("hoge", "fuga"))),
+        example("行頭がタブの行はタブを含めて値とし、タブだけの行は空行", "/hoge\n\t\ta\tb\nc\n\t\nd",
+            new UnnamedListElement(List.of("\t\ta\tb", "c")), new UnnamedListElement(List.of("d"))),
         example("ハッシュ引用は改行をまたがない", """
                 /hoge
                 #hoge
