@@ -22,6 +22,9 @@ spotless {
     java {
         target("src/*/java/**/*.java")
 
+        // import は static を先頭にまとめ、残りを1つのグループで辞書順に並べる。
+        importOrder("\\#", "")
+
         // 波括弧・インデント・折り返しは Eclipse フォーマッターの設定に従う
         eclipse(libs.versions.eclipse.formatter.get())
             .configFile(rootProject.file(".vscode/eclipse-formatter.xml"))
