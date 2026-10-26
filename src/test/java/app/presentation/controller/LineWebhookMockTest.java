@@ -51,6 +51,12 @@ class LineWebhookMockTest {
       {"annictId":2,"title":"放送未定アニメ","officialSiteUrl":null,"programs":{"nodes":[]}}
       """;
 
+  /** 2027年冬の作品で、放送日時がまだ登録されていない。 */
+  private static final String NEXT_SEASON = """
+      {"annictId":3,"title":"来季アニメ","officialSiteUrl":null,"seasonYear":2027,"seasonName":"WINTER",
+       "programs":{"nodes":[]}}
+      """;
+
   WireMock wiremock;
 
   @BeforeEach
@@ -74,10 +80,9 @@ class LineWebhookMockTest {
     assertEquals("Bearer test-channel-token", reply.authorization());
     assertEquals(REPLY_TOKEN, reply.token());
     assertEquals(String.join("\n",
-        "状態\t検索語\t放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL\t理由",
-        "放送予定\tSHIROBAKO\t2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\thttps://example.com/shirobako\t",
-        "対象外\tSHIROBAKO\t\t\t\t\t放送未定アニメ\t\t日時未定",
-        "未登録\t存在しない作品\t\t\t\t\t存在しない作品\t\t"), reply.text());
+        "状態\t検索語\t放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
+        "放送済み\tSHIROBAKO\t2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\thttps://example.com/shirobako",
+        "未登録\t存在しない作品\t\t\t\t\t存在しない作品\t"), reply.text());
 
     // Annict には1回だけ、設定したトークンと検索語ごとの変数が送られる。
     var annict = this.wiremock.find(postRequestedFor(urlEqualTo(ANNICT_PATH)));
@@ -108,13 +113,27 @@ class LineWebhookMockTest {
   void findSwitchesSelectStatusesAndPlainDropsColumns() throws Exception {
     annictReturnsWorks(SHIROBAKO + "," + NO_BROADCAST);
 
-    sendText("/find #word SHIROBAKO #from 2026-10 #skip #plain");
+    sendText("/find #word SHIROBAKO #from 2026-10 #done #plain");
 
     assertEquals(String.join("\n",
         "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
-        "\t\t\t\t放送未定アニメ\t"), onlyReply().text());
+        "2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\thttps://example.com/shirobako"), onlyReply().text());
   }
 
+  @Test
+  void findSeasonWithoutWordsListsSeasonWorksWithUnknownDatesAsScheduled() throws Exception {
+    annictReturnsWorks(NEXT_SEASON);
+
+    sendText("/find #season 2027-winter #hit");
+
+    assertEquals(String.join("\n",
+        "状態\t検索語\t放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
+        "放送予定\t\t\t\t\t\t来季アニメ\t"), onlyReply().text());
+    var variables = JSON.readTree(this.wiremock.find(postRequestedFor(urlEqualTo(ANNICT_PATH)))
+        .getFirst().getBodyAsString()).path("variables");
+    assertEquals(List.of("2027-winter"), JSON.convertValue(variables.path("s"), List.class));
+    assertTrue(variables.path("t0").isMissingNode());
+  }
   @Test
   void reserveRegistersPastedFindTsvToEdcbAndRepliesWithResultTsv() throws Exception {
     edcbAcceptsAutoAdd("[{\"dataID\":1,\"searchInfo\":{\"andKey\":\"ＳＨＩＲＯＢＡＫＯ\"}}]");
@@ -167,12 +186,12 @@ class LineWebhookMockTest {
   // MARK: 入力エラー
 
   @Test
-  void findWithoutWordRepliesWithParseError() throws Exception {
-    sendText("/find #from 2026-10");
+  void findWithoutWordOrPeriodRepliesWithParseError() throws Exception {
+    sendText("/find #format md");
 
     var text = onlyReply().text();
     assertTrue(text.startsWith("コマンドのパースに失敗しました。"), text);
-    assertTrue(text.contains("word は必須です"), text);
+    assertTrue(text.contains("word か期間（season・from・to）を指定してください"), text);
   }
 
   @Test

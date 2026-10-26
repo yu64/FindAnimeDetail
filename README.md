@@ -4,13 +4,14 @@
 
 ```text
 /find #word 作品名
-/find #word 作品名1, 作品名2 #from 2026-10
+/find #word 作品名1, 作品名2 #season next
+/find #word 作品名 #from 2027-01 #to 2027-04
+/find #season 2027-winter #hit #plain
 /find #format md #word 作品名
 /find #word 作品名1, 作品名2 #miss
-/find #word 作品名 #hit #plain
 ```
 
-これから初回放送されるアニメを Annict で探し、検索語ごとに「放送予定」「対象外」「未登録」を区別して返します。`#hit`・`#skip`・`#miss` で出力する区分を選び、`#plain` で状態・検索語・理由の列を省けます。仕様は [docs/find-plan.md](docs/find-plan.md) を参照してください。
+作品名や期間からアニメの初回放送を Annict で探し、「放送予定」「放送済み」「対象外」「期間外」「未登録」を区別して返します。期間は `#season`（`2027-winter`・`now`・`next`）か `#from`・`#to` で指定し、省略時は現在以降です。`#hit`・`#done`・`#skip`・`#out`・`#miss` で出力する状態を選び、`#plain` で状態・検索語の列を省けます。仕様は [docs/find-plan.md](docs/find-plan.md) を参照してください。
 
 ## EPG自動予約
 

@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.StringJoiner;
 import org.eclipse.microprofile.rest.client.annotation.ClientHeaderParam;
@@ -38,6 +39,8 @@ public interface IAnnictDef extends IAnnictClient {
         annictId
         title
         officialSiteUrl
+        seasonYear
+        seasonName
         programs(first: %d, orderBy: {field: STARTED_AT, direction: ASC}) {
           nodes {
             startedAt
@@ -48,13 +51,25 @@ public interface IAnnictDef extends IAnnictClient {
       }
     """.formatted(PAGE_SIZE);
 
-  /** 検索語ごとにエイリアス（w0, w1…）を付け、1回のリクエストにまとめる。 */
-  public static String worksQuery(int count) {
+  /**
+   * 検索語ごとにエイリアス（w0, w1…）を付け、1回のリクエストにまとめる。
+   * シーズンも指定する場合は、シーズンに関係なく作品があるかを e0, e1… で1件だけ確認する。
+   * 検索語がなければ、シーズンの作品を視聴者数の多い順に w0 で取得する。
+   */
+  public static String worksQuery(int titleCount, boolean hasSeasons) {
     var params = new StringJoiner(", ");
     var fields = new StringJoiner("\n");
-    for(int i = 0; i < count; i++) {
+    if(hasSeasons) params.add("$s: [String!]");
+
+    if(titleCount == 0) {
+      fields.add("  w0: searchWorks(seasons: $s, first: %d, orderBy: {field: WATCHERS_COUNT, direction: DESC}) {\n%s  }"
+          .formatted(PAGE_SIZE, WORK_FIELDS));
+    }
+    for(int i = 0; i < titleCount; i++) {
       params.add("$t%d: [String!]".formatted(i));
-      fields.add("  w%d: searchWorks(titles: $t%d, first: %d) {\n%s  }".formatted(i, i, PAGE_SIZE, WORK_FIELDS));
+      fields.add("  w%d: searchWorks(titles: $t%d%s, first: %d) {\n%s  }"
+          .formatted(i, i, hasSeasons ? ", seasons: $s" : "", PAGE_SIZE, WORK_FIELDS));
+      if(hasSeasons) fields.add("  e%d: searchWorks(titles: $t%d, first: 1) { nodes { annictId } }".formatted(i, i));
     }
     return "query SearchWorks(" + params + ") {\n" + fields + "\n}";
   }
@@ -75,45 +90,60 @@ public interface IAnnictDef extends IAnnictClient {
   // MARK: 作品検索
 
   @Override
-  public default List<WordResult> search(List<String> words, List<Integer> channelPriority) {
+  public default List<WordResult> search(List<String> words, List<String> seasons, List<Integer> channelPriority) {
 
-    // 検索語の前後の空白と重複を除き、局IDの指定を検証する。
+    // 検索語・シーズンの前後の空白と重複を除き、局IDの指定を検証する。
     List<String> titles = words.stream().map(String::strip).filter(word -> !word.isEmpty()).distinct().toList();
+    List<String> seasonList = seasons.stream().map(String::strip).filter(s -> !s.isEmpty()).distinct().toList();
     List<Integer> priorities = List.copyOf(channelPriority);
 
-    if(titles.isEmpty()) {
-      throw new IllegalArgumentException("Specify at least one title");
+    if(titles.isEmpty() && seasonList.isEmpty()) {
+      throw new IllegalArgumentException("Specify titles or seasons");
     }
     if(priorities.isEmpty() || priorities.stream().anyMatch(id -> id <= 0)) {
       throw new IllegalArgumentException("Specify positive channel IDs in priority order");
     }
 
-    // 検索語ごとの変数を渡し、全検索語を1回で問い合わせる。
+    // 検索語ごとの変数とシーズンを渡し、1回で問い合わせる。
     Map<String, Object> variables = new LinkedHashMap<>();
+    if(!seasonList.isEmpty()) variables.put("s", seasonList);
     for(int i = 0; i < titles.size(); i++) {
       variables.put("t" + i, List.of(titles.get(i)));
     }
-    JsonNode data = request(worksQuery(titles.size()), variables);
+    JsonNode data = request(worksQuery(titles.size(), !seasonList.isEmpty()), variables);
 
-    // エイリアスの番号から検索語を対応付ける。同じ検索語の中では同じ作品を1件にまとめる。
+    // 検索語がなければ、シーズンの作品を1つの結果として返す。
+    if(titles.isEmpty()) {
+      var works = works(data.path("w0"), priorities);
+      return List.of(new WordResult(null, works, !works.isEmpty()));
+    }
+
+    // エイリアスの番号から検索語を対応付ける。シーズンを指定しない場合は w の作品の有無で存在を判定する。
     List<WordResult> results = new ArrayList<>();
     for(int i = 0; i < titles.size(); i++) {
-      List<Anime> works = new ArrayList<>();
-      var workIds = new HashSet<Integer>();
-
-      for(JsonNode work : nodes(data.path("w" + i))) {
-        int id = work.path("annictId").asInt();
-        if(id <= 0 || !work.path("title").isTextual()) {
-          throw new AnimeSearchException("Invalid Annict work");
-        }
-        if(workIds.add(id)) {
-          works.add(anime(id, work, priorities));
-        }
-      }
-      results.add(new WordResult(titles.get(i), works));
+      var works = works(data.path("w" + i), priorities);
+      boolean exists = seasonList.isEmpty() ? !works.isEmpty() : nodes(data.path("e" + i)).size() > 0;
+      results.add(new WordResult(titles.get(i), works, exists));
     }
 
     return List.copyOf(results);
+  }
+
+  /** 同じエイリアスの中では同じ作品を1件にまとめる。 */
+  private List<Anime> works(JsonNode connection, List<Integer> priorities) {
+    List<Anime> works = new ArrayList<>();
+    var workIds = new HashSet<Integer>();
+
+    for(JsonNode work : nodes(connection)) {
+      int id = work.path("annictId").asInt();
+      if(id <= 0 || !work.path("title").isTextual()) {
+        throw new AnimeSearchException("Invalid Annict work");
+      }
+      if(workIds.add(id)) {
+        works.add(anime(id, work, priorities));
+      }
+    }
+    return works;
   }
 
   // ###########################################################################
@@ -123,6 +153,7 @@ public interface IAnnictDef extends IAnnictClient {
   private Anime anime(int id, JsonNode work, List<Integer> priorities) {
     Map<Integer, FirstBroadcast> firstByChannel = new HashMap<>();
     FirstBroadcast unknownChannel = null;
+    ZonedDateTime firstAiredAt = null;
     boolean hasBroadcasts = false;
 
     for(JsonNode program : nodes(work.path("programs"))) {
@@ -130,12 +161,6 @@ public interface IAnnictDef extends IAnnictClient {
       if(program.path("rebroadcast").asBoolean(false)) continue;
       hasBroadcasts = true;
 
-      JsonNode channel = program.path("channel");
-      int channelId = channel.path("annictId").asInt();
-      // 判明している指定外の局は採用しない。局自体が不明なら補足候補として保持する。
-      if(channelId > 0 && !priorities.contains(channelId)) continue;
-
-      String name = channel.path("name").asText("");
       ZonedDateTime startsAt = null;
       try {
         startsAt = OffsetDateTime.parse(program.path("startedAt").asText(""))
@@ -143,6 +168,15 @@ public interface IAnnictDef extends IAnnictClient {
       } catch(DateTimeParseException ignored) {
         // 欠損・解釈できない日時は不明のまま残す。
       }
+      // 優先局の放送がない作品の期間判定に使うため、局を問わず最初の日時を保持する。
+      if(firstAiredAt == null) firstAiredAt = startsAt;
+
+      JsonNode channel = program.path("channel");
+      int channelId = channel.path("annictId").asInt();
+      // 判明している指定外の局は採用しない。局自体が不明なら補足候補として保持する。
+      if(channelId > 0 && !priorities.contains(channelId)) continue;
+
+      String name = channel.path("name").asText("");
       var candidate = new FirstBroadcast(Math.max(0, channelId), name.isBlank() ? null : name, startsAt);
 
       // 放送データは古い順のため、局ごとに最初の日時付きの放送を採用する。
@@ -165,9 +199,14 @@ public interface IAnnictDef extends IAnnictClient {
       }
     }
 
+    // シーズンは「2027-winter」形式にそろえる。年か名前が欠けていれば未設定とする。
+    int year = work.path("seasonYear").asInt(0);
+    String seasonName = work.path("seasonName").asText("");
+    String season = year > 0 && !seasonName.isBlank() ? year + "-" + seasonName.toLowerCase(Locale.ROOT) : null;
+
     String url = work.path("officialSiteUrl").asText("");
-    return new Anime(id, work.path("title").asText(), url.isBlank() ? null : URI.create(url), first,
-        hasBroadcasts);
+    return new Anime(id, work.path("title").asText(), url.isBlank() ? null : URI.create(url), season, first,
+        firstAiredAt, hasBroadcasts);
   }
 
   // ###########################################################################

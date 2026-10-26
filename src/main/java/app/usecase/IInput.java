@@ -11,8 +11,8 @@ public sealed interface IInput {
   public static record HelpInput(String cmd) implements IInput {};
 
 
-  /** from は初回放送日時の下限（nullなら現在日時）。statuses は出力する区分、plain は状態・検索語・理由の列を省く。 */
-  public static record FindInput(Format fmt, List<String> words, OffsetDateTime from, Set<Status> statuses,
+  /** words は空なら期間だけで探す。statuses は出力する状態（空ならすべて）、plain は状態・検索語の列を省く。 */
+  public static record FindInput(Format fmt, List<String> words, Period period, Set<Status> statuses,
       boolean plain) implements IInput {
 
     public FindInput {
@@ -20,22 +20,37 @@ public sealed interface IInput {
       statuses = statuses.isEmpty() ? EnumSet.allOf(Status.class) : EnumSet.copyOf(statuses);
     }
 
-    /** すべての区分を、すべての列で出力する。 */
-    public FindInput(Format fmt, List<String> words, OffsetDateTime from) {
-      this(fmt, words, from, Set.of(), false);
+    /** すべての状態を、すべての列で出力する。 */
+    public FindInput(Format fmt, List<String> words, Period period) {
+      this(fmt, words, period, Set.of(), false);
     }
 
+    /** 期間を指定しない場合は、現在以降を期間とする。 */
     public FindInput(Format fmt, List<String> words) {
-      this(fmt, words, null);
+      this(fmt, words, new Period.Range(null, null));
     }
 
     public static enum Format {
       TSV, MD
     }
 
-    /** 検索語ごとの区分。label は出力する状態の名前。 */
+    /** 期間。シーズンか日時のどちらか一方で指定する。 */
+    public sealed interface Period {
+
+      /** 作品のシーズンがいずれかに一致すれば期間内。 */
+      public record Seasons(List<Season> seasons) implements Period {
+        public Seasons {
+          seasons = List.copyOf(seasons);
+        }
+      }
+
+      /** 初回放送が from 以上・to 未満なら期間内。from が null なら現在日時、to が null なら上限なし。 */
+      public record Range(OffsetDateTime from, OffsetDateTime to) implements Period {}
+    }
+
+    /** 作品または検索語の状態。label は出力する状態の名前。 */
     public static enum Status {
-      HIT("放送予定"), SKIP("対象外"), MISS("未登録");
+      HIT("放送予定"), DONE("放送済み"), SKIP("対象外"), OUT("期間外"), MISS("未登録");
 
       public final String label;
 
