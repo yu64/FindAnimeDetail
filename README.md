@@ -4,14 +4,13 @@
 
 ```text
 /find #word 作品名
-/find #word 作品名 #from 2026-10-01T00:00
-/find #word 作品名 #from 2026-10
+/find #word 作品名1, 作品名2 #from 2026-10
 /find #format md #word 作品名
-/find #word 作品名 #all
+/find #word 作品名1, 作品名2 #miss
+/find #word 作品名 #hit #plain
 ```
 
-
-既定では放送日時・放送局が揃った作品だけを表示します。`#all` を指定すると、不明な情報がある作品も含め、不明な欄は `N/A` と表示します。公式URLの有無は除外条件に含めません。
+これから初回放送されるアニメを Annict で探し、検索語ごとに「放送予定」「対象外」「未登録」を区別して返します。`#hit`・`#skip`・`#miss` で出力する区分を選び、`#plain` で状態・検索語・理由の列を省けます。仕様は [docs/find-plan.md](docs/find-plan.md) を参照してください。
 
 ## EPG自動予約
 

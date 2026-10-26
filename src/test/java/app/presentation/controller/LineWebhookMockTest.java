@@ -15,6 +15,7 @@ import io.restassured.response.Response;
 import java.io.ByteArrayInputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -41,14 +42,13 @@ class LineWebhookMockTest {
   /** 優先局（TOKYO MX）で 2026-10-02(金) 23:00 JST に初回放送する作品。 */
   private static final String SHIROBAKO = """
       {"annictId":1,"title":"SHIROBAKO","officialSiteUrl":"https://example.com/shirobako",
-       "programs":{"nodes":[{"startedAt":"2026-10-02T14:00:00Z","channel":{"annictId":19,"name":"TOKYO MX"}}],
-                   "pageInfo":{"hasNextPage":false,"endCursor":null}}}
+       "programs":{"nodes":[{"startedAt":"2026-10-02T14:00:00Z","rebroadcast":false,
+                             "channel":{"annictId":19,"name":"TOKYO MX"}}]}}
       """;
 
   /** 放送情報が登録されていない作品。 */
   private static final String NO_BROADCAST = """
-      {"annictId":2,"title":"放送未定アニメ","officialSiteUrl":null,
-       "programs":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}
+      {"annictId":2,"title":"放送未定アニメ","officialSiteUrl":null,"programs":{"nodes":[]}}
       """;
 
   WireMock wiremock;
@@ -64,25 +64,28 @@ class LineWebhookMockTest {
   // MARK: 正常系
 
   @Test
-  void findRepliesWithTsvThroughAnnict() throws Exception {
-    annictReturnsWorks(SHIROBAKO);
+  void findRepliesWithTsvPerWordThroughOneAnnictRequest() throws Exception {
+    annictReturnsWorks(SHIROBAKO + "," + NO_BROADCAST, "");
 
-    sendText("/find #word SHIROBAKO #from 2026-10");
+    sendText("/find #word SHIROBAKO, 存在しない作品 #from 2026-10");
 
     // 返信は LINE の返信 API に、正しい認証・返信トークンで届く。
     var reply = onlyReply();
     assertEquals("Bearer test-channel-token", reply.authorization());
     assertEquals(REPLY_TOKEN, reply.token());
     assertEquals(String.join("\n",
-        "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
-        "2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\thttps://example.com/shirobako"), reply.text());
+        "状態\t検索語\t放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL\t理由",
+        "放送予定\tSHIROBAKO\t2026-10-02\t23:00\t金\tTOKYO MX\tSHIROBAKO\thttps://example.com/shirobako\t",
+        "対象外\tSHIROBAKO\t\t\t\t\t放送未定アニメ\t\t日時未定",
+        "未登録\t存在しない作品\t\t\t\t\t存在しない作品\t\t"), reply.text());
 
-    // Annict には設定したトークンと検索語が送られる。
+    // Annict には1回だけ、設定したトークンと検索語ごとの変数が送られる。
     var annict = this.wiremock.find(postRequestedFor(urlEqualTo(ANNICT_PATH)));
     assertEquals(1, annict.size());
     assertEquals("Bearer test-annict-token", annict.getFirst().getHeader("Authorization"));
-    assertEquals(List.of("SHIROBAKO"), JSON.convertValue(
-        JSON.readTree(annict.getFirst().getBodyAsString()).path("variables").path("titles"), List.class));
+    var variables = JSON.readTree(annict.getFirst().getBodyAsString()).path("variables");
+    assertEquals(List.of("SHIROBAKO"), JSON.convertValue(variables.path("t0"), List.class));
+    assertEquals(List.of("存在しない作品"), JSON.convertValue(variables.path("t1"), List.class));
   }
 
   @Test
@@ -97,20 +100,19 @@ class LineWebhookMockTest {
 
     // URL に埋め込まれた Markdown を復元し、検索結果の表になっていることを確認する。
     var markdown = decodeMarkdown(text.substring(prefix.length()));
-    assertTrue(markdown.contains("| [SHIROBAKO](https://annict.com/works/1) |"), markdown);
+    assertTrue(markdown.contains("| SHIROBAKO | [SHIROBAKO](https://annict.com/works/1) |"), markdown);
     assertTrue(markdown.contains("2026-10-02（金） 23:00"), markdown);
   }
 
   @Test
-  void findHidesWorksWithUnknownBroadcastUnlessAllIsGiven() throws Exception {
-    annictReturnsWorks(SHIROBAKO, NO_BROADCAST);
+  void findSwitchesSelectStatusesAndPlainDropsColumns() throws Exception {
+    annictReturnsWorks(SHIROBAKO + "," + NO_BROADCAST);
 
-    sendText("/find #word SHIROBAKO #from 2026-10");
-    assertFalse(onlyReply().text().contains("放送未定アニメ"));
+    sendText("/find #word SHIROBAKO #from 2026-10 #skip #plain");
 
-    this.wiremock.resetRequests();
-    sendText("/find #word SHIROBAKO #from 2026-10 #all");
-    assertTrue(onlyReply().text().endsWith("N/A\tN/A\tN/A\tN/A\t放送未定アニメ\t"));
+    assertEquals(String.join("\n",
+        "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL",
+        "\t\t\t\t放送未定アニメ\t"), onlyReply().text());
   }
 
   @Test
@@ -312,11 +314,14 @@ class LineWebhookMockTest {
   // ###########################################################################
   // MARK: ヘルパー: Annict のスタブ
 
-  /** Annict の作品検索が、指定した作品を1ページで返すようにする。 */
-  private void annictReturnsWorks(String... works) {
-    this.wiremock.register(post(urlEqualTo(ANNICT_PATH)).willReturn(okJson("""
-        {"data":{"searchWorks":{"nodes":[%s],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}
-        """.formatted(String.join(",", works)))));
+  /** Annict の作品検索が、検索語（エイリアス w0, w1…）ごとに指定した作品を返すようにする。引数は作品のJSONをカンマでつないだもの。 */
+  private void annictReturnsWorks(String... worksPerWord) {
+    var aliases = new ArrayList<String>();
+    for(int i = 0; i < worksPerWord.length; i++) {
+      aliases.add("\"w%d\":{\"nodes\":[%s]}".formatted(i, worksPerWord[i]));
+    }
+    this.wiremock.register(post(urlEqualTo(ANNICT_PATH))
+        .willReturn(okJson("{\"data\":{" + String.join(",", aliases) + "}}")));
   }
 
   // ###########################################################################

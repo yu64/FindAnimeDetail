@@ -2,8 +2,10 @@ package app.usecase;
 
 import app.config.AnnictConfig;
 import app.usecase.IAnnictClient.Anime;
-import app.usecase.IAnnictClient.SearchCondition;
+import app.usecase.IAnnictClient.FirstBroadcast;
+import app.usecase.IAnnictClient.WordResult;
 import app.usecase.IInput.FindInput;
+import app.usecase.IInput.FindInput.Status;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import java.io.ByteArrayOutputStream;
@@ -17,10 +19,9 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
+import java.util.ArrayList;
 import java.util.Base64;
-import java.util.Collection;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -44,11 +45,34 @@ public class FindUsecase {
           Map.of(1L, "月", 2L, "火", 3L, "水", 4L, "木", 5L, "金", 6L, "土", 7L, "日"))
       .toFormatter(Locale.ROOT);
 
-  // 日付は比較せず、日本時間の曜日（月→日）と時刻で並べる。日時不明は末尾。
-  private static final Comparator<Anime> BROADCAST_ORDER = Comparator.comparing(
-      FindUsecase::japaneseStartsAt,
+  // 日付は比較せず、日本時間の曜日（月→日）と時刻で並べる。
+  private static final Comparator<Row> BROADCAST_ORDER = Comparator.comparing(
+      Row::startsAt,
       Comparator.nullsLast(Comparator.comparingInt((ZonedDateTime time) -> time.getDayOfWeek().getValue())
           .thenComparing(time -> time.toLocalTime())));
+
+  /** 判定済みの1行。work は未登録なら null、reason は対象外のときだけ値を持つ。 */
+  private record Row(Status status, String word, Anime work, String reason) {
+
+    /** 初回放送の日本時間。不明ならnull。 */
+    ZonedDateTime startsAt() {
+      var first = this.work == null ? null : this.work.firstBroadcast();
+      return first == null || first.startsAt() == null
+          ? null
+          : first.startsAt().withZoneSameInstant(ZoneId.of("Asia/Tokyo"));
+    }
+
+    /** 局名。不明なら空文字。 */
+    String channelName() {
+      var first = this.work == null ? null : this.work.firstBroadcast();
+      return first == null || first.channelName() == null ? "" : first.channelName().strip();
+    }
+
+    /** 未登録の行は、1行1タイトルにそろえるため検索語をタイトルにする。 */
+    String title() {
+      return this.work == null ? this.word : this.work.title();
+    }
+  }
 
   /** アニメ検索クライアントと放送局の優先順位を含む設定を受け取る。 */
   @Inject
@@ -58,90 +82,137 @@ public class FindUsecase {
   }
 
   // ###########################################################################
-  // MARK: 作品検索
+  // MARK: 作品検索・区分の判定
 
-  /** 全タイトルを検索し、重複を除いた結果をTSVまたはMarkdown ViewerのURLで返す。 */
+  /** 検索語ごとに作品を区分し、指定された区分だけをTSVまたはMarkdown ViewerのURLで返す。 */
   public String run(FindInput input) {
     var from = input.from() == null ? OffsetDateTime.now(ZoneId.of("Asia/Tokyo")) : input.from();
-    var condition = new SearchCondition(input.words(), List.of(), from, false);
-    // 全タイトルをOR検索し、APIの返却順を保ちながら重複を除く。
-    var works = new LinkedHashMap<Integer, Anime>();
-    for(Anime work : this.annict.search(condition, this.config.channelPriority())) {
-      var first = work.firstBroadcast();
-      if(!input.all() && (first == null || first.startsAt() == null
-          || first.channelName() == null || first.channelName().isBlank())) {
+
+    // 並び順は検索語の入力順 → 状態（放送予定・対象外・未登録）。
+    List<Row> rows = new ArrayList<>();
+    for(WordResult result : this.annict.search(input.words(), this.config.channelPriority())) {
+      if(result.works().isEmpty()) {
+        rows.add(new Row(Status.MISS, result.word(), null, ""));
         continue;
       }
-      works.putIfAbsent(work.annictId(), work);
+
+      List<Row> hits = new ArrayList<>();
+      List<Row> skips = new ArrayList<>();
+      for(Anime work : result.works()) {
+        String reason = skipReason(work, from);
+        if(reason == null) {
+          hits.add(new Row(Status.HIT, result.word(), work, ""));
+        } else {
+          skips.add(new Row(Status.SKIP, result.word(), work, reason));
+        }
+      }
+
+      // 同じ曜日・時刻の作品と対象外の作品は、APIの返却順を維持する。
+      hits.sort(BROADCAST_ORDER);
+      rows.addAll(hits);
+      rows.addAll(skips);
     }
+    rows.removeIf(row -> !input.statuses().contains(row.status()));
 
-    // 同じ曜日・時刻の作品と日時不明の作品同士は、APIの返却順を維持する。
-    var sortedWorks = works.values().stream().sorted(BROADCAST_ORDER).toList();
+    return input.fmt() == FindInput.Format.MD
+        ? toMarkdownViewerUrl(rows, input)
+        : toTsv(rows, input.plain());
+  }
 
-    // Markdown指定なら、表をブラウザで開くためのURLを返す。
-    if(input.fmt() == FindInput.Format.MD) {
-      return toMarkdownViewerUrl(sortedWorks);
+  /** 放送予定なら null、対象外なら理由を返す。from は境界を含む。 */
+  private static String skipReason(Anime work, OffsetDateTime from) {
+    FirstBroadcast first = work.firstBroadcast();
+    if(first != null && first.startsAt() != null) {
+      return first.startsAt().toInstant().isBefore(from.toInstant()) ? "放送済み" : null;
     }
+    // 優先局の放送はあるが日時が不明、または放送データ自体がない。
+    if(first != null || !work.hasBroadcasts()) return "日時未定";
+    return "対象局なし";
+  }
 
-    // TSVはヘッダーに続けて作品を並べる。0件の場合も列名は返す。
+  // ###########################################################################
+  // MARK: TSVへの整形
+
+  /** 返信全体を1つのTSVにする。0件の場合も列名は返す。 */
+  private String toTsv(List<Row> rows, boolean plain) {
     var tsv = new StringJoiner("\n");
-    tsv.add("放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL");
+    tsv.add(plain
+        ? "放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL"
+        : "状態\t検索語\t放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL\t理由");
 
-    for(Anime work : sortedWorks) {
-      tsv.add(toTsvRow(work));
+    for(Row row : rows) {
+      var startsAt = row.startsAt();
+      var url = row.work() == null || row.work().officialSiteUrl() == null
+          ? ""
+          : row.work().officialSiteUrl().toString();
+
+      // 値がない欄は空文字にする。値がない理由は状態・理由の列で分かる。
+      List<String> cells = new ArrayList<>();
+      if(!plain) cells.addAll(List.of(row.status().label, row.word()));
+      cells.addAll(List.of(
+          startsAt == null ? "" : DATE.format(startsAt),
+          startsAt == null ? "" : TIME.format(startsAt),
+          startsAt == null ? "" : DAY.format(startsAt),
+          row.channelName(), row.title(), url));
+      if(!plain) cells.add(row.reason());
+
+      tsv.add(String.join("\t", cells.stream().map(this::toTsvCell).toList()));
     }
 
     return tsv.toString();
   }
 
-  private static ZonedDateTime japaneseStartsAt(Anime work) {
-    var first = work.firstBroadcast();
-    return first == null || first.startsAt() == null
-        ? null
-        : first.startsAt().withZoneSameInstant(ZoneId.of("Asia/Tokyo"));
+  /** タブと改行を空白へ置き換え、外部データによるTSVの列・行の崩れを防ぐ。 */
+  private String toTsvCell(String value) {
+    return value.replace("\r\n", " ").replace('\r', ' ').replace('\n', ' ').replace('\t', ' ');
   }
 
   // ###########################################################################
   // MARK: Markdown Viewerへの整形
 
-  /** Markdown表をUTF-8・gzip・Base64の順で変換し、Viewerのmdzパラメータに渡す。 */
-  private String toMarkdownViewerUrl(Collection<Anime> works) {
-    // タイトルを先頭に置き、日時を1列にまとめて横幅を抑える。
+  /** 区分ごとの表をUTF-8・gzip・Base64の順で変換し、Viewerのmdzパラメータに渡す。 */
+  private String toMarkdownViewerUrl(List<Row> rows, FindInput input) {
     var markdown = new StringJoiner("\n");
     markdown.add("# アニメ検索結果").add("");
-    markdown.add("**" + works.size() + " 作品** · 日時は日本時間").add("");
-    markdown.add("> N/A：作品の存在は確認できましたが、該当する放送情報は不明です。").add("");
-    markdown.add("| 作品 | 初回放送 | 放送局 | 公式サイト |");
-    markdown.add("| :--- | :--- | :--- | :---: |");
 
-    // 作品ごとに表示用の日時・リンクを組み立て、表へ追加する。
-    for(Anime work : works) {
-      // 日付・時刻・曜日は、すべて日本時間の初回放送日時から取り出す。
-      var first = work.firstBroadcast();
-      var startsAt = first == null || first.startsAt() == null
-          ? null
-          : first.startsAt().withZoneSameInstant(ZoneId.of("Asia/Tokyo"));
+    // 件数の見出しは、指定された区分だけを並べる。
+    var counts = new StringJoiner(" · ");
+    for(Status status : input.statuses()) {
+      counts.add(status.label + " " + rows.stream().filter(row -> row.status() == status).count() + " 件");
+    }
+    markdown.add("**" + counts + "** · 日時は日本時間");
 
-      // HTTP(S)の公式URLはリンクにし、それ以外は文字列、未登録はダッシュにする。
-      var url = work.officialSiteUrl();
-      String link = "—";
-      if(url != null) {
-        link = toMarkdownCell(url.toString());
-        if("https".equalsIgnoreCase(url.getScheme()) || "http".equalsIgnoreCase(url.getScheme())) {
-          link = "[公式サイト](<" + url.toASCIIString().replace("|", "%7C") + ">)";
-        }
+    // 指定されていない区分の見出しは出さない。検索語・理由の列は #plain で省く。
+    boolean plain = input.plain();
+    for(Status status : input.statuses()) {
+      var section = rows.stream().filter(row -> row.status() == status).toList();
+      markdown.add("").add("## " + status.label).add("");
+      if(section.isEmpty()) {
+        markdown.add("該当なし");
+        continue;
       }
 
-      // 局名やタイトルの記号をエスケープして、表の列や書式の崩れを防ぐ。
-      markdown.add("| " + String.join(" | ",
-          "[" + toMarkdownCell(work.title()) + "](https://annict.com/works/" + work.annictId() + ")",
-          startsAt == null ? "N/A" : DATE.format(startsAt) + "（" + DAY.format(startsAt) + "） " + TIME.format(startsAt),
-          toMarkdownCell(channelName(first)), link) + " |");
-    }
-
-    // 空の表だけでは検索結果が分かりにくいため、該当なしの案内を添える。
-    if(works.isEmpty()) {
-      markdown.add("").add("該当する作品はありません。");
+      switch(status) {
+        case HIT -> {
+          markdown.add(plain ? "| 作品 | 初回放送 | 放送局 | 公式サイト |" : "| 検索語 | 作品 | 初回放送 | 放送局 | 公式サイト |");
+          markdown.add(plain ? "| :--- | :--- | :--- | :---: |" : "| :--- | :--- | :--- | :--- | :---: |");
+          for(Row row : section) {
+            markdown.add(markdownRow(plain, row, workLink(row.work()), broadcastCell(row),
+                emptyDash(toMarkdownCell(row.channelName())), officialLink(row.work())));
+          }
+        }
+        case SKIP -> {
+          markdown.add(plain ? "| 作品 | 初回放送 | 放送局 |" : "| 検索語 | 作品 | 初回放送 | 放送局 | 理由 |");
+          markdown.add(plain ? "| :--- | :--- | :--- |" : "| :--- | :--- | :--- | :--- | :--- |");
+          for(Row row : section) {
+            var cells = new ArrayList<>(List.of(workLink(row.work()), broadcastCell(row),
+                emptyDash(toMarkdownCell(row.channelName()))));
+            if(!plain) cells.add(toMarkdownCell(row.reason()));
+            markdown.add(markdownRow(plain, row, cells.toArray(String[]::new)));
+          }
+        }
+        case MISS -> section.forEach(row -> markdown.add("- " + toMarkdownCell(row.word())));
+      }
     }
 
     // 日本語をUTF-8に変換してgzip圧縮し、URLへ格納するデータを小さくする。
@@ -162,6 +233,37 @@ public class FindUsecase {
         : "検索結果が多いため表示用URLを作成できません。タイトルや日時を指定して検索範囲を絞ってください。";
   }
 
+  /** 表の1行。#plain でなければ先頭に検索語の列を置く。 */
+  private String markdownRow(boolean plain, Row row, String... cells) {
+    var all = new ArrayList<String>();
+    if(!plain) all.add(toMarkdownCell(row.word()));
+    all.addAll(List.of(cells));
+    return "| " + String.join(" | ", all) + " |";
+  }
+
+  private String workLink(Anime work) {
+    return "[" + toMarkdownCell(work.title()) + "](https://annict.com/works/" + work.annictId() + ")";
+  }
+
+  private String broadcastCell(Row row) {
+    var startsAt = row.startsAt();
+    return startsAt == null ? "—" : DATE.format(startsAt) + "（" + DAY.format(startsAt) + "） " + TIME.format(startsAt);
+  }
+
+  /** HTTP(S)の公式URLはリンクにし、それ以外は文字列、未登録はダッシュにする。 */
+  private String officialLink(Anime work) {
+    var url = work.officialSiteUrl();
+    if(url == null) return "—";
+    if("https".equalsIgnoreCase(url.getScheme()) || "http".equalsIgnoreCase(url.getScheme())) {
+      return "[公式サイト](<" + url.toASCIIString().replace("|", "%7C") + ">)";
+    }
+    return toMarkdownCell(url.toString());
+  }
+
+  private static String emptyDash(String value) {
+    return value.isEmpty() ? "—" : value;
+  }
+
   /** 外部の文字列を表のセル内の文字として表示し、Markdown構文として解釈させない。 */
   private String toMarkdownCell(String value) {
     // 改行・タブを除いた文字列を走査し、MarkdownのASCII記号をエスケープする。
@@ -175,37 +277,5 @@ public class FindUsecase {
     }
 
     return escaped.toString();
-  }
-
-  // ###########################################################################
-  // MARK: TSVへの整形
-
-  /** 作品を日本時間の初回放送日・時刻・曜日・局名・タイトル・公式URLの6列に変換する。 */
-  private String toTsvRow(Anime work) {
-    // 出力する日付・時刻・曜日の基準を日本時間に揃える。
-    var first = work.firstBroadcast();
-    var startsAt = first == null || first.startsAt() == null
-        ? null
-        : first.startsAt().withZoneSameInstant(ZoneId.of("Asia/Tokyo"));
-
-    // 列順を固定し、公式URLが未登録でも末尾の空欄を残す。
-    return String.join("\t",
-        startsAt == null ? "N/A" : DATE.format(startsAt),
-        startsAt == null ? "N/A" : TIME.format(startsAt),
-        startsAt == null ? "N/A" : DAY.format(startsAt),
-        toTsvCell(channelName(first)),
-        toTsvCell(work.title()),
-        work.officialSiteUrl() == null ? "" : toTsvCell(work.officialSiteUrl().toString()));
-  }
-
-  private String channelName(IAnnictClient.FirstBroadcast first) {
-    return first == null || first.channelName() == null || first.channelName().isBlank()
-        ? "N/A"
-        : first.channelName();
-  }
-
-  /** タブと改行を空白へ置き換え、外部データによるTSVの列・行の崩れを防ぐ。 */
-  private String toTsvCell(String value) {
-    return value.replace("\r\n", " ").replace('\r', ' ').replace('\n', ' ').replace('\t', ' ');
   }
 }

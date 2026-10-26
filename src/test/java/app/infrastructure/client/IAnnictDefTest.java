@@ -3,178 +3,166 @@ package app.infrastructure.client;
 import static org.junit.jupiter.api.Assertions.*;
 
 import app.infrastructure.AnimeSearchException;
-import app.usecase.IAnnictClient.SearchCondition;
+import app.usecase.IAnnictClient.Anime;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Clock;
 import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class IAnnictDefTest {
-  private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-12T00:00:00Z"), ZoneOffset.UTC);
-  private static final SearchCondition CONDITION = new SearchCondition("テスト", List.of("2026-autumn"), null, false);
 
+  /** 1回の応答を返し、送られたリクエストを記録する。 */
   static class Stub implements IAnnictDef {
-    final ArrayDeque<JsonNode> responses = new ArrayDeque<>();
+    final JsonNode response;
     final List<GraphQlRequest> requests = new ArrayList<>();
-    Stub(String... json) throws Exception {
-      for(String item : json)
-        responses.add(new ObjectMapper().readTree(item));
+    Stub(String json) throws Exception {
+      response = new ObjectMapper().readTree(json);
     }
     public JsonNode execute(GraphQlRequest request) {
       requests.add(request);
-      return responses.remove();
+      return response;
     }
   }
 
-  static String works(int id, String cursor, String programCursor, String... broadcasts) {
+  /** エイリアス w0, w1… ごとの作品一覧を持つ応答。 */
+  static String data(String... aliases) {
+    var fields = new ArrayList<String>();
+    for(int i = 0; i < aliases.length; i++) {
+      fields.add("\"w%d\":{\"nodes\":[%s]}".formatted(i, aliases[i]));
+    }
+    return "{\"data\":{" + String.join(",", fields) + "}}";
+  }
+
+  static String work(int id, String... programs) {
     return """
-            {"data":{"searchWorks":{"nodes":[{"annictId":%d,"title":"テスト","officialSiteUrl":null,"programs":{"nodes":[%s],"pageInfo":{"hasNextPage":%s,"endCursor":"%s"}}}],
-            "pageInfo":{"hasNextPage":%s,"endCursor":"%s"}}}}
-            """.formatted(id, String.join(",", broadcasts), programCursor != null, programCursor, cursor != null,
-        cursor);
+        {"annictId":%d,"title":"作品%d","officialSiteUrl":null,"programs":{"nodes":[%s]}}
+        """.formatted(id, id, String.join(",", programs));
   }
 
   static String program(int channel, String date) {
-    return """
-            {"startedAt":"%s","channel":{"annictId":%d,"name":"局%d"}}
-            """.formatted(date, channel, channel);
+    return program(channel, date, false);
   }
 
-  static String programs(String cursor, String... programs) {
+  static String program(int channel, String date, boolean rebroadcast) {
     return """
-            {"data":{"searchWorks":{"nodes":[{"programs":{"nodes":[%s],
-            "pageInfo":{"hasNextPage":%s,"endCursor":"%s"}}}]}}}
-            """.formatted(String.join(",", programs), cursor != null, cursor);
+        {"startedAt":"%s","rebroadcast":%s,"channel":{"annictId":%d,"name":"局%d"}}
+        """.formatted(date, rebroadcast, channel, channel);
   }
+
+  private static Anime only(Stub stub, List<Integer> priorities) {
+    return stub.search(List.of("テスト"), priorities).getFirst().works().getFirst();
+  }
+
+  // ###########################################################################
+  // MARK: 問い合わせ
 
   @Test
-  void sendsAllTitlesAndBroadcastsInOneRequestWhenFirstPageSuffices() throws Exception {
-    var stub = new Stub(works(15804, null, "unused", program(19, "2026-10-01T00:00:00Z")));
-    var condition = new SearchCondition(List.of(" シャングリラ ", "SHIROBAKO", "シャングリラ"),
-        List.of(), null, false);
-    assertEquals(1, stub.search(condition, List.of(19, 7), CLOCK).size());
+  void sendsEveryWordInOneRequestWithOneAliasPerWord() throws Exception {
+    var stub = new Stub(data(work(1), ""));
+
+    var results = stub.search(List.of(" シャングリラ ", "SHIROBAKO", "シャングリラ", " "), List.of(19, 7));
+
     assertEquals(1, stub.requests.size());
-    assertEquals(List.of("シャングリラ", "SHIROBAKO"), stub.requests.getFirst().variables().get("titles"));
-    assertTrue(stub.requests.getFirst().query().contains("programs(first: 50"));
+    var request = stub.requests.getFirst();
+    assertEquals(List.of("シャングリラ"), request.variables().get("t0"));
+    assertEquals(List.of("SHIROBAKO"), request.variables().get("t1"));
+    assertEquals(2, request.variables().size());
+    assertTrue(request.query().contains("w0: searchWorks(titles: $t0, first: 50)"));
+    assertTrue(request.query().contains("w1: searchWorks(titles: $t1, first: 50)"));
+    assertTrue(request.query().contains("programs(first: 50"));
+    assertTrue(request.query().contains("rebroadcast"));
+    assertFalse(request.query().contains("w2:"));
+    assertFalse(request.query().contains("pageInfo"));
+    assertEquals(List.of("シャングリラ", "SHIROBAKO"), results.stream().map(r -> r.word()).toList());
   }
 
   @Test
-  void preservesKnownDateWhenStationIsUnknownAndKnownStationWhenDateIsUnknown() throws Exception {
-    var unknownStation = new Stub(works(1, null, null,
-        "{\"startedAt\":\"2026-10-01T00:00:00Z\",\"channel\":null}"));
-    var first = unknownStation.search(CONDITION, List.of(19), CLOCK).getFirst().firstBroadcast();
-    assertNotNull(first.startsAt());
-    assertNull(first.channelName());
-    var unknownDate = new Stub(works(1, null, null, program(19, "invalid")));
-    first = unknownDate.search(CONDITION, List.of(19), CLOCK).getFirst().firstBroadcast();
-    assertNull(first.startsAt());
-    assertEquals("局19", first.channelName());
+  void mapsAliasesToWordsAndRemovesDuplicateWorksWithinWord() throws Exception {
+    var stub = new Stub(data(String.join(",", work(1), work(2), work(1)), "", work(1)));
+
+    var results = stub.search(List.of("A", "B", "C"), List.of(19));
+
+    assertEquals(List.of(1, 2), results.get(0).works().stream().map(Anime::annictId).toList());
+    assertTrue(results.get(1).works().isEmpty());
+    assertEquals(List.of(1), results.get(2).works().stream().map(Anime::annictId).toList());
   }
 
-  @Test
-  void findsDatedBroadcastOnLaterPageForSameStation() throws Exception {
-    var stub = new Stub(works(1, null, "next", program(19, "")),
-        programs(null, program(19, "2026-10-01T00:00:00Z")));
-    assertNotNull(stub.search(CONDITION, List.of(19), CLOCK).getFirst().firstBroadcast().startsAt());
-    assertEquals(2, stub.requests.size());
-  }
+  // ###########################################################################
+  // MARK: 初回放送の判定
 
   @Test
-  void pagesWorksAndProgramsAndChoosesPriorityBeforeDate() throws Exception {
-    var stub = new Stub(works(1, "work-next", "program-next", program(7, "2026-10-01T12:00:00Z")),
-        programs(null, program(19, "2026-10-02T16:00:00Z")),
-        works(2, null, null));
+  void choosesPriorityBeforeDateAndIgnoresRebroadcasts() throws Exception {
+    var stub = new Stub(data(work(1,
+        program(19, "2026-09-01T00:00:00Z", true),
+        program(7, "2026-10-01T12:00:00Z"),
+        program(19, "2026-10-02T16:00:00Z"),
+        program(19, "2026-10-09T16:00:00Z"))));
 
-    var results = stub.search(CONDITION, List.of(19, 7), CLOCK);
+    var first = only(stub, List.of(19, 7)).firstBroadcast();
 
-    assertEquals(2, results.size());
-    assertNull(results.get(1).firstBroadcast());
-    var first = results.getFirst().firstBroadcast();
     assertEquals(19, first.channelId());
+    assertEquals("局19", first.channelName());
     assertEquals("2026-10-03T01:00+09:00[Asia/Tokyo]", first.startsAt().toString());
     assertEquals(DayOfWeek.SATURDAY, first.startsAt().getDayOfWeek());
-    assertEquals("program-next", stub.requests.get(1).variables().get("after"));
-    assertEquals("work-next", stub.requests.get(2).variables().get("after"));
-    assertEquals(List.of("2026-autumn"), stub.requests.getFirst().variables().get("seasons"));
-    assertFalse(stub.requests.stream().anyMatch(r -> r.query().contains("episode")));
-    assertTrue(stub.responses.isEmpty());
   }
 
   @Test
-  void futureFilterDoesNotReplacePastPremiereWithNextEpisodeOrLowerPriorityChannel() throws Exception {
-    var stub = new Stub(works(1, null, null,
-        program(19, "2026-09-01T00:00:00Z"),
-        program(19, "2026-09-20T00:00:00Z"),
-        program(7, "2026-10-01T00:00:00Z")));
-    assertTrue(stub.search(new SearchCondition("テスト", List.of(), null, true),
-        List.of(19, 7), CLOCK).isEmpty());
+  void fallsBackToLowerPriorityThenUnknownChannelButNeverToOtherChannels() throws Exception {
+    var lower = new Stub(data(work(1, program(99, "2026-09-01T00:00:00Z"), program(7, "2026-10-01T00:00:00Z"))));
+    assertEquals(7, only(lower, List.of(19, 7)).firstBroadcast().channelId());
+
+    var unknown = new Stub(data(work(1, program(99, "2026-09-01T00:00:00Z"),
+        "{\"startedAt\":\"2026-10-01T00:00:00Z\",\"rebroadcast\":false,\"channel\":null}")));
+    var first = only(unknown, List.of(19)).firstBroadcast();
+    assertEquals(0, first.channelId());
+    assertNull(first.channelName());
+    assertNotNull(first.startsAt());
+
+    var other = only(new Stub(data(work(1, program(99, "2026-10-01T00:00:00Z")))), List.of(19, 7));
+    assertNull(other.firstBroadcast());
+    assertTrue(other.hasBroadcasts());
   }
 
   @Test
-  void minimumIsInclusiveAndFutureIsStrict() throws Exception {
-    var minimum = OffsetDateTime.parse("2026-09-12T00:00:00Z");
-    var inclusive = new Stub(works(1, null, null, program(19, minimum.toString())));
-    assertEquals(1, inclusive.search(new SearchCondition("テスト", List.of(), minimum, false),
-        List.of(19), CLOCK).size());
-    var strict = new Stub(works(1, null, null, program(19, minimum.toString())));
-    assertTrue(strict.search(new SearchCondition("テスト", List.of(), minimum, true),
-        List.of(19), CLOCK).isEmpty());
+  void hasBroadcastsIsFalseWithoutProgramsOrWithOnlyRebroadcasts() throws Exception {
+    var none = only(new Stub(data(work(1))), List.of(19));
+    assertNull(none.firstBroadcast());
+    assertFalse(none.hasBroadcasts());
+
+    var rebroadcastOnly = only(new Stub(data(work(1, program(19, "2026-10-01T00:00:00Z", true)))), List.of(19));
+    assertNull(rebroadcastOnly.firstBroadcast());
+    assertFalse(rebroadcastOnly.hasBroadcasts());
   }
 
   @Test
-  void missingPreferredStationFallsBackOnlyWithinConfiguredStations() throws Exception {
-    var stub = new Stub(works(1, null, null,
-        program(99, "2026-09-01T00:00:00Z"), program(7, "2026-10-01T00:00:00Z")));
-    assertEquals(7, stub.search(CONDITION, List.of(19, 7), CLOCK)
-        .getFirst().firstBroadcast().channelId());
-    var unknown = new Stub(works(1, null, null, program(99, "2026-10-01T00:00:00Z")));
-    assertNull(unknown.search(CONDITION, List.of(19, 7), CLOCK).getFirst().firstBroadcast());
+  void keepsKnownStationWhenDateIsUnknownAndPrefersLaterDatedBroadcastOnSameStation() throws Exception {
+    var unknownDate = only(new Stub(data(work(1, program(19, "invalid")))), List.of(19)).firstBroadcast();
+    assertNull(unknownDate.startsAt());
+    assertEquals("局19", unknownDate.channelName());
+
+    var dated = only(new Stub(data(work(1, program(19, ""), program(19, "2026-10-01T00:00:00Z")))), List.of(19))
+        .firstBroadcast();
+    assertNotNull(dated.startsAt());
   }
 
+  // ###########################################################################
+  // MARK: 入力・応答の異常
+
   @Test
-  void retainsMissingOrInvalidBroadcastFieldsWithoutDateFilters() throws Exception {
-    for(String incomplete : List.of(
-        "{\"channel\":{\"annictId\":19,\"name\":\"局\"}}",
-        "{\"startedAt\":null,\"channel\":{\"annictId\":19,\"name\":\"局\"}}",
-        program(19, ""), program(19, "invalid"),
-        "{\"startedAt\":\"2026-10-01T00:00:00Z\",\"channel\":null}",
-        "{\"startedAt\":\"2026-10-01T00:00:00Z\",\"channel\":{\"annictId\":19}}",
-        "{\"startedAt\":\"2026-10-01T00:00:00Z\",\"channel\":{\"annictId\":19,\"name\":null}}",
-        "{\"startedAt\":\"2026-10-01T00:00:00Z\",\"channel\":{\"annictId\":19,\"name\":\" \"}}")) {
-      var stub = new Stub(works(1, null, null, incomplete));
-      assertEquals(1, stub.search(CONDITION, List.of(19), CLOCK).size(), incomplete);
+  void rejectsInvalidInputGraphQlErrorsAndBrokenResponses() throws Exception {
+    var stub = new Stub(data(""));
+    assertThrows(IllegalArgumentException.class, () -> stub.search(List.of(" "), List.of(19)));
+    assertThrows(IllegalArgumentException.class, () -> stub.search(List.of("A"), List.of()));
+    assertThrows(IllegalArgumentException.class, () -> stub.search(List.of("A"), List.of(0)));
+
+    for(String broken : List.of(
+        "{\"errors\":[{\"message\":\"denied\"}],\"data\":null}",
+        "{\"data\":{}}",
+        data("{\"annictId\":0,\"title\":\"不正\",\"programs\":{\"nodes\":[]}}"),
+        data("{\"annictId\":1,\"title\":\"放送なし\"}"))) {
+      assertThrows(AnimeSearchException.class, () -> new Stub(broken).search(List.of("A"), List.of(19)), broken);
     }
-  }
-
-  @Test
-  void incompleteProgramsDoNotPreventFindingValidBroadcastsOnLaterPages() throws Exception {
-    var stub = new Stub(works(1, null, "next", program(19, "")),
-        programs(null, program(7, "2026-10-01T00:00:00Z")));
-    var first = stub.search(CONDITION, List.of(19, 7), CLOCK).getFirst().firstBroadcast();
-    assertEquals(19, first.channelId());
-    assertNull(first.startsAt());
-    assertEquals(2, stub.requests.size());
-  }
-
-  @Test
-  void retainsUnknownDatesWhenMinimumIsSpecified() throws Exception {
-    var stub = new Stub(works(1, null, null));
-    assertEquals(1, stub.search(new SearchCondition("テスト", List.of(),
-        OffsetDateTime.parse("2026-09-12T00:00:00Z"), false), List.of(19), CLOCK).size());
-  }
-
-  @Test
-  void rejectsGraphQlErrorsAndBrokenPagination() throws Exception {
-    var error = new Stub("{\"errors\":[{\"message\":\"denied\"}],\"data\":null}");
-    assertThrows(AnimeSearchException.class, () -> error.search(CONDITION, List.of(19), CLOCK));
-    var pages = new Stub(works(1, "same", null), works(1, "same", null));
-    assertThrows(AnimeSearchException.class, () -> pages.search(CONDITION, List.of(19), CLOCK));
   }
 }

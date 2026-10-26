@@ -75,7 +75,7 @@ class LineControllerTest {
   @Test
   void unauthorizedUserIsRejectedWithoutRunningCommand() throws Exception {
     var replies = new ArrayList<String>();
-    var controller = controller((condition, priorities) -> fail("Annict must not be called"),
+    var controller = controller((words, priorities) -> fail("Annict must not be called"),
         (token, text) -> replies.add(text));
     assertEquals(200, controller.handle(request("tsv", "test-unauthorized-user")).getStatus());
     assertEquals(List.of("このボットを利用する権限がありません。"), replies);
@@ -85,7 +85,7 @@ class LineControllerTest {
   void repliesWithRateLimitNoticeForBothFormats() throws Exception {
     for(String format : List.of("tsv", "md")) {
       var replies = new ArrayList<String>();
-      IAnnictClient annict = (condition, priorities) -> {
+      IAnnictClient annict = (words, priorities) -> {
         throw new AnimeSearchException("API failed", new RuntimeException(
             new WebApplicationException(Response.status(429).build())));
       };
@@ -104,7 +104,7 @@ class LineControllerTest {
         new AnimeSearchException("secret-detail", new WebApplicationException(503)),
         new IllegalStateException("secret-detail"))) {
       var replies = new ArrayList<String>();
-      var controller = controller((condition, priorities) -> {
+      var controller = controller((words, priorities) -> {
         throw failure;
       },
           (token, text) -> replies.add(text));
@@ -119,11 +119,11 @@ class LineControllerTest {
   @Test
   void normalResultsStillReplyAndReplyFailuresAreNotRetried() throws Exception {
     var replies = new ArrayList<String>();
-    var controller = controller((condition, priorities) -> List.of(), (token, text) -> {
+    var controller = controller((words, priorities) -> List.of(), (token, text) -> {
       replies.add(text);
       throw new IllegalStateException("reply failed");
     });
     assertThrows(IllegalStateException.class, () -> controller.handle(request("tsv")));
-    assertEquals(List.of("放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL"), replies);
+    assertEquals(List.of("状態\t検索語\t放送開始日\t時刻\t曜日\t放送局\tタイトル\t公式URL\t理由"), replies);
   }
 }
